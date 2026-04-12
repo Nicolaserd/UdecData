@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Estudiante {
+  id                Int      @id @default(autoincrement())
+  categoria         String
+  unidad_regional   String
+  nivel             String
+  nivel_academico   String
+  programa_academico String
+  cantidad          Int
+  anio              Int      @map("año")
+  periodo           String
+  created_at        DateTime @default(now())
+
+  @@unique([categoria, unidad_regional, nivel, nivel_academico, programa_academico, anio, periodo])
+  @@map("estudiantes")
+}

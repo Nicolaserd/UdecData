@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed 's/<si><t>//g')",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest add button card table progress badge -y)",
+      "Bash(grep -iv \"^PROGRAMA$\")",
+      "Bash(npx prisma:*)"
+    ]
+  }
+}
