@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
 import { FileUploadZone } from "./file-upload-zone";
 import { ResultsTable } from "./results-table";
 import { ConfirmOverwrite } from "./confirm-overwrite";
@@ -333,7 +334,14 @@ export function UploadForm() {
           disabled={!requiredReady || processing}
           className="bg-green-700 hover:bg-green-800"
         >
-          {processing ? "Procesando..." : "Procesar Archivos"}
+          {processing ? (
+            <>
+              <Spinner className="h-4 w-4 mr-2" />
+              Procesando...
+            </>
+          ) : (
+            "Procesar Archivos"
+          )}
         </Button>
 
         {xlsxBlob && (
@@ -356,9 +364,23 @@ export function UploadForm() {
       )}
 
       {processing && (
-        <div className="space-y-2">
-          <p className="text-sm text-gray-600">Procesando archivos...</p>
+        <div className="space-y-3 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <Spinner className="h-5 w-5 text-green-600" />
+            <p className="text-sm font-medium text-green-800">
+              {progress < 20
+                ? "Verificando datos existentes..."
+                : progress < 40
+                  ? "Preparando archivos..."
+                  : progress < 70
+                    ? "Procesando y normalizando registros..."
+                    : progress < 100
+                      ? "Guardando en base de datos y generando Excel..."
+                      : "Finalizado"}
+            </p>
+          </div>
           <Progress value={progress} className="h-2" />
+          <p className="text-xs text-green-600">{progress}% completado</p>
         </div>
       )}
 

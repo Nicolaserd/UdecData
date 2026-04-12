@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, Fragment } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Spinner, LoadingOverlay } from "@/components/ui/spinner";
 import {
   Card,
   CardHeader,
@@ -83,6 +84,7 @@ const ALL = "__ALL__";
 export function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   // Filters
   const [filterRegion, setFilterRegion] = useState<string>(ALL);
@@ -265,6 +267,7 @@ export function Dashboard() {
   }, [filtered]);
 
   const handleExportDb = async () => {
+    setExporting(true);
     try {
       const res = await fetch("/api/export-db");
       if (!res.ok) throw new Error("Error descargando");
@@ -278,6 +281,8 @@ export function Dashboard() {
       toast.success("Base de datos descargada");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error descargando");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -290,11 +295,7 @@ export function Dashboard() {
   const hasFilters = filterRegion !== ALL || filterPrograma !== ALL || filterAnio !== ALL;
 
   if (loading) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        Cargando dashboard...
-      </div>
-    );
+    return <LoadingOverlay message="Cargando dashboard..." />;
   }
 
   if (!data || data.rows.length === 0) {
@@ -314,8 +315,15 @@ export function Dashboard() {
         <h2 className="text-xl font-semibold text-gray-800">
           Dashboard Estadístico
         </h2>
-        <Button onClick={handleExportDb} variant="outline">
-          Descargar Base de Datos (.xlsx)
+        <Button onClick={handleExportDb} variant="outline" disabled={exporting}>
+          {exporting ? (
+            <>
+              <Spinner className="h-4 w-4 mr-2" />
+              Descargando...
+            </>
+          ) : (
+            "Descargar Base de Datos (.xlsx)"
+          )}
         </Button>
       </div>
 
