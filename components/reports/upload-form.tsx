@@ -16,40 +16,42 @@ interface ExistingCategory {
   registros: number;
 }
 
+const ACCEPT_ALL = ".csv,.xlsx,.xls";
+
 const REQUIRED_FILES = [
   {
     key: "matriculados",
     label: "Matriculados",
-    accept: ".csv",
-    description: "Reporte general de Matriculados (CSV, delimitado por ;)",
+    accept: ACCEPT_ALL,
+    description: "Reporte general de Matriculados (CSV o Excel)",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO"],
   },
   {
     key: "admitidos",
     label: "Admitidos",
-    accept: ".csv",
-    description: "Reporte general de Admitidos (CSV, delimitado por ;)",
+    accept: ACCEPT_ALL,
+    description: "Reporte general de Admitidos (CSV o Excel)",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO"],
   },
   {
     key: "primiparos",
     label: "Primíparos",
-    accept: ".csv",
-    description: "Reporte general de Estudiantes Primer Curso (CSV, delimitado por ;)",
+    accept: ACCEPT_ALL,
+    description: "Reporte general de Estudiantes Primer Curso (CSV o Excel)",
     requiredColumns: ["AÑO", "SEMESTRE", "NOMBRE PROGRAMA", "MUNICIPIO"],
   },
   {
     key: "inscritos",
     label: "Inscritos",
-    accept: ".xlsx",
-    description: "Reporte general de Inscrito programa (XLSX)",
+    accept: ACCEPT_ALL,
+    description: "Reporte general de Inscrito programa (CSV o Excel)",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO"],
   },
   {
     key: "graduados",
     label: "Graduados",
-    accept: ".csv",
-    description: "Reporte general de Graduados (CSV, delimitado por ;)",
+    accept: ACCEPT_ALL,
+    description: "Reporte general de Graduados (CSV o Excel)",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO PROGRAMA"],
   },
 ] as const;
@@ -97,7 +99,21 @@ export function UploadForm() {
     setFiles((prev) => ({ ...prev, [key]: file }));
   };
 
-  // Step 1: Detect año+periodo from one CSV, then check existing data
+  // Helper: read any file (CSV or Excel) as CSV text
+  const readAsCSV = async (file: File): Promise<string> => {
+    const ext = file.name.toLowerCase().split(".").pop() ?? "";
+    if (ext === "csv" || ext === "txt") {
+      return await file.text();
+    }
+    // Excel → convert to CSV with SheetJS
+    const { default: XLSX } = await import("xlsx");
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_csv(ws, { FS: ";" });
+  };
+
+  // Step 1: Detect año+periodo from first file, then check existing data
   const handleSubmit = async () => {
     if (!requiredReady) return;
 
@@ -108,13 +124,12 @@ export function UploadForm() {
     setStats(null);
 
     try {
-      // Read año and semestre from the first CSV (matriculados)
-      const csvText = await files.matriculados!.text();
+      // Read año and semestre from matriculados (CSV or Excel)
+      const csvText = await readAsCSV(files.matriculados!);
       const firstDataLine = csvText.split(/\r?\n/)[1];
       if (!firstDataLine) throw new Error("Archivo de Matriculados vacío");
 
       const fields = firstDataLine.split(";").map((f) => f.replace(/"/g, "").trim());
-      // Find AÑO and SEMESTRE by header position
       const headerLine = csvText.split(/\r?\n/)[0].replace(/^\uFEFF/, "");
       const headers = headerLine.split(";").map((h) => h.replace(/"/g, "").trim());
       const anioIdx = headers.findIndex((h) => h === "AÑO" || h === "\u00C1\u00D1O" || h.includes("AÑO") || h.includes("O"));
@@ -126,7 +141,6 @@ export function UploadForm() {
       if (anioIdx >= 0) anio = parseInt(fields[anioIdx], 10);
       if (semIdx >= 0) semestre = parseInt(fields[semIdx], 10);
 
-      // Fallback: try common positions (3rd and 4th columns, 0-indexed: 2 and 3)
       if (isNaN(anio) || anio < 2000) anio = parseInt(fields[2], 10);
       if (isNaN(semestre)) semestre = parseInt(fields[3], 10);
 

@@ -8,6 +8,7 @@ import { parseEstudiantesHistorico } from "@/lib/parsers/parse-estudiantes-histo
 import { aggregateStudents } from "@/lib/aggregation/aggregate-students";
 import { generateEstudiantesXlsx } from "@/lib/export/generate-xlsx";
 import { saveEstudiantes } from "@/lib/supabase/save-estudiantes";
+import { readFileAsCSV } from "@/lib/parsers/read-file";
 import { NormalizedStudentRow } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
@@ -37,24 +38,15 @@ export async function POST(request: NextRequest) {
     const allRows: NormalizedStudentRow[] = [];
     const allWarnings: string[] = [];
 
-    // Parse all files in parallel
-    const promises: Promise<unknown>[] = [
-      matriculadosFile.text(),
-      admitidosFile.text(),
-      primiparosFile.text(),
-      inscritosFile.arrayBuffer(),
-      graduadosFile.text(),
-    ];
-    if (estudiantesFile) {
-      promises.push(estudiantesFile.arrayBuffer());
-    }
-
-    const results = await Promise.all(promises);
-    const matriculadosText = results[0] as string;
-    const admitidosText = results[1] as string;
-    const primiparosText = results[2] as string;
-    const inscritosBuffer = results[3] as ArrayBuffer;
-    const graduadosText = results[4] as string;
+    // Read all files - auto-detect CSV or Excel format
+    const [matriculadosText, admitidosText, primiparosText, inscritosText, graduadosText] =
+      await Promise.all([
+        readFileAsCSV(matriculadosFile),
+        readFileAsCSV(admitidosFile),
+        readFileAsCSV(primiparosFile),
+        readFileAsCSV(inscritosFile),
+        readFileAsCSV(graduadosFile),
+      ]);
 
     const matriculados = parseMatriculados(matriculadosText);
     allRows.push(...matriculados.rows);
@@ -68,7 +60,8 @@ export async function POST(request: NextRequest) {
     allRows.push(...primiparos.rows);
     allWarnings.push(...primiparos.warnings);
 
-    const inscritos = parseInscritos(inscritosBuffer);
+    // parseInscritos now receives CSV text (same as others)
+    const inscritos = parseInscritos(inscritosText);
     allRows.push(...inscritos.rows);
     allWarnings.push(...inscritos.warnings);
 
@@ -79,7 +72,7 @@ export async function POST(request: NextRequest) {
     // Parse historical data if provided
     let historico;
     if (estudiantesFile) {
-      const estudiantesBuffer = results[5] as ArrayBuffer;
+      const estudiantesBuffer = await estudiantesFile.arrayBuffer();
       const parsed = parseEstudiantesHistorico(estudiantesBuffer);
       historico = parsed.rows;
       allWarnings.push(...parsed.warnings);
@@ -88,7 +81,7 @@ export async function POST(request: NextRequest) {
     // Aggregate new data, merging with historical if available
     const aggregated = aggregateStudents(allRows, historico);
 
-    // Get allowed categories from form data (categories user confirmed to overwrite)
+    // Get allowed categories from form data
     const allowedCategoriesRaw = formData.get("allowedCategories") as string | null;
     const allowedCategories = allowedCategoriesRaw
       ? new Set<string>(JSON.parse(allowedCategoriesRaw))

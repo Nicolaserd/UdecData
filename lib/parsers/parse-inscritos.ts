@@ -1,34 +1,42 @@
-import * as XLSX from "xlsx";
+import Papa from "papaparse";
 import { NormalizedStudentRow } from "../types";
 import { normalizeProgram } from "../normalization/program-normalizer";
 import { mapMunicipio } from "../normalization/municipio-mapper";
 import { resolveNivel } from "../normalization/nivel-resolver";
 import { semestreToPeriodo } from "../normalization/canonical-data";
 
-interface InscritosRaw {
+interface InscritosRow {
   PROGRAMA: string;
   MUNICIPIO: string;
-  "AÑO": number | string;
-  SEMESTRE: number | string;
-  [key: string]: unknown;
+  "AÑO": string;
+  SEMESTRE: string;
+  [key: string]: string;
 }
 
 export function parseInscritos(
-  buffer: ArrayBuffer
+  csvText: string
 ): { rows: NormalizedStudentRow[]; warnings: string[] } {
   const warnings: string[] = [];
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const rawData = XLSX.utils.sheet_to_json<InscritosRaw>(sheet);
+  const clean = csvText.replace(/^\uFEFF/, "");
+
+  const parsed = Papa.parse<InscritosRow>(clean, {
+    delimiter: ";",
+    header: true,
+    skipEmptyLines: true,
+    quoteChar: '"',
+  });
+
+  if (parsed.errors.length > 0) {
+    warnings.push(`Inscritos: ${parsed.errors.length} errores de parseo`);
+  }
 
   const rows: NormalizedStudentRow[] = [];
 
-  for (const row of rawData) {
+  for (const row of parsed.data) {
     const programa = String(row["PROGRAMA"] || "").trim();
     const municipio = String(row["MUNICIPIO"] || "").trim();
-    const año = parseInt(String(row["AÑO"] || ""), 10);
-    const semestreRaw = parseInt(String(row["SEMESTRE"] || ""), 10);
+    const año = parseInt(row["AÑO"] || row["\u00C1\u00D1O"] || "", 10);
+    const semestreRaw = parseInt(row["SEMESTRE"] || "", 10);
 
     if (!programa || !municipio || isNaN(año) || isNaN(semestreRaw)) continue;
 
