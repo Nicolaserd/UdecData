@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-/** Capitalize first letter: "pregrado" → "Pregrado" */
-function capitalize(s: string): string {
+/** Normalize nivel: capitalize + merge Tecnología into Pregrado */
+function normalizeNivel(s: string): string {
   if (!s) return s;
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  const cap = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  if (cap === "Tecnología" || cap === "Tecnologia") return "Pregrado";
+  return cap;
 }
 
 /** Normalize periodo: "1" → "IPA", "2" → "IIPA", keep "IPA"/"IIPA" as-is */
@@ -33,7 +35,7 @@ export async function GET() {
     const rows = allRows.map((r) => ({
       categoria: r.categoria,
       unidadRegional: r.unidad_regional,
-      nivel: capitalize(r.nivel),
+      nivel: normalizeNivel(r.nivel),
       programa: r.programa_academico,
       cantidad: r.cantidad,
       anio: r.anio,

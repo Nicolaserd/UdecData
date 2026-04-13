@@ -4,10 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
-  CardContent,
 } from "@/components/ui/card";
 
 interface ExistingCategory {
@@ -33,41 +33,46 @@ export function ConfirmOverwrite({
   onCancel,
 }: ConfirmOverwriteProps) {
   const existingMap = new Map(
-    existingCategories.map((c) => [c.categoria, c.registros])
+    existingCategories.map((category) => [category.categoria, category.registros])
   );
 
-  // Categories that already exist start unchecked, new ones start checked
   const [selected, setSelected] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
-    for (const cat of allCategories) {
-      initial[cat] = !existingMap.has(cat);
+    for (const category of allCategories) {
+      initial[category] = !existingMap.has(category);
     }
     return initial;
   });
 
-  const toggleCategory = (cat: string) => {
-    setSelected((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  const toggleCategory = (category: string) => {
+    setSelected((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
   const handleConfirm = () => {
-    const selectedCategories = allCategories.filter((cat) => selected[cat]);
+    const selectedCategories = allCategories.filter(
+      (category) => selected[category]
+    );
+
     if (selectedCategories.length === 0) {
       onCancel();
       return;
     }
+
     onConfirm(selectedCategories);
   };
 
   const selectAll = () => {
     const updated: Record<string, boolean> = {};
-    for (const cat of allCategories) updated[cat] = true;
+    for (const category of allCategories) {
+      updated[category] = true;
+    }
     setSelected(updated);
   };
 
   return (
     <Card className="border-amber-300 bg-amber-50">
       <CardHeader>
-        <CardTitle className="text-amber-800 text-lg">
+        <CardTitle className="text-lg text-amber-800">
           Datos existentes detectados
         </CardTitle>
         <CardDescription className="text-amber-700">
@@ -78,31 +83,33 @@ export function ConfirmOverwrite({
           . Selecciona qué categorías deseas reemplazar en la base de datos.
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          {allCategories.map((cat) => {
-            const existingCount = existingMap.get(cat);
+          {allCategories.map((category) => {
+            const existingCount = existingMap.get(category);
             const hasExisting = existingCount !== undefined;
 
             return (
               <label
-                key={cat}
-                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  selected[cat]
+                key={category}
+                className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${
+                  selected[category]
                     ? hasExisting
-                      ? "bg-amber-100 border-amber-400"
-                      : "bg-green-50 border-green-300"
-                    : "bg-white border-gray-200"
+                      ? "border-amber-400 bg-amber-100"
+                      : "border-green-300 bg-green-50"
+                    : "border-gray-200 bg-white"
                 }`}
               >
                 <input
                   type="checkbox"
-                  checked={selected[cat]}
-                  onChange={() => toggleCategory(cat)}
-                  className="w-4 h-4 rounded accent-green-700"
+                  checked={selected[category]}
+                  onChange={() => toggleCategory(category)}
+                  className="h-4 w-4 rounded accent-green-700"
                 />
+
                 <div className="flex-1">
-                  <span className="font-medium text-gray-800">{cat}</span>
+                  <span className="font-medium text-gray-800">{category}</span>
                   {hasExisting ? (
                     <span className="ml-2 text-sm text-amber-700">
                       ({existingCount} registros existentes - se reemplazarán)

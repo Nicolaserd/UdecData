@@ -121,10 +121,38 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .font-home-display {
+    font-family: var(--font-manrope), sans-serif;
+  }
+
+  .font-home-body {
+    font-family: var(--font-inter), sans-serif;
+  }
+
+  .font-home-label {
+    font-family: var(--font-work-sans), sans-serif;
+  }
+
+  .home-hero-gradient {
+    background: linear-gradient(135deg, #00682f 0%, #00843d 100%);
+  }
+
+  .home-card-shadow {
+    box-shadow: 0 20px 40px rgba(0, 104, 47, 0.08);
+  }
+
+  .home-cta-shadow {
+    box-shadow: 0 20px 40px rgba(0, 104, 47, 0.2);
   }
 }

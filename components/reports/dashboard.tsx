@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState, useMemo, Fragment } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Spinner, LoadingOverlay } from "@/components/ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Card,
+  CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
-  CardContent,
 } from "@/components/ui/card";
 import {
   LineChart,
@@ -51,11 +52,11 @@ interface DashboardData {
 
 const CATEGORIAS = ["Matriculados", "Admitidos", "Primiparos", "Inscritos", "Graduados"];
 const COLORS: Record<string, string> = {
-  Matriculados: "#16a34a",
-  Admitidos: "#2563eb",
-  Primiparos: "#d97706",
-  Inscritos: "#7c3aed",
-  Graduados: "#dc2626",
+  Matriculados: "#00682f",
+  Admitidos: "#0058be",
+  Primiparos: "#a06500",
+  Inscritos: "#6b7b00",
+  Graduados: "#8a244d",
 };
 
 // ── Helpers ────────────────────────────────────────────
@@ -79,6 +80,51 @@ function pctChange(prev: number, curr: number): number {
 const periodoOrder = (p: string) => (p === "IPA" ? 0 : p === "IIPA" ? 1 : 2);
 
 const ALL = "__ALL__";
+const SURFACE_CLASS =
+  "border border-[#bdcabb]/10 bg-white shadow-[0_18px_40px_rgba(25,28,29,0.04)]";
+const SELECT_CLASS =
+  "min-h-12 rounded-lg border border-[#bdcabb]/70 bg-[#f8f9fa] px-4 py-3 text-sm text-[#191c1d] outline-none transition focus:border-[#00682f] focus:ring-4 focus:ring-[#00682f]/10";
+const AXIS_TICK = { fill: "#6e7a6e", fontSize: 12 };
+const LEGEND_STYLE = { paddingTop: 20, fontSize: 12 };
+const TOOLTIP_STYLE = {
+  backgroundColor: "rgba(255,255,255,0.96)",
+  border: "1px solid rgba(189,202,187,0.6)",
+  borderRadius: "12px",
+  boxShadow: "0 20px 40px rgba(25,28,29,0.08)",
+};
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("es-CO").format(value);
+}
+
+function renderDelta(change: number) {
+  const value =
+    change > 0
+      ? `+${Math.round(change * 10) / 10}%`
+      : `${Math.round(change * 10) / 10}%`;
+
+  if (change > 0) {
+    return (
+      <p className="mt-2 text-sm font-medium text-[#00843d]">
+        {value} vs periodo anterior
+      </p>
+    );
+  }
+
+  if (change < 0) {
+    return (
+      <p className="mt-2 text-sm font-medium text-[#d92d20]">
+        {value} vs periodo anterior
+      </p>
+    );
+  }
+
+  return (
+    <p className="mt-2 text-sm font-medium text-[#6e7a6e]">
+      0.0% vs periodo anterior
+    </p>
+  );
+}
 
 // ── Component ──────────────────────────────────────────
 export function Dashboard() {
@@ -295,14 +341,27 @@ export function Dashboard() {
   const hasFilters = filterRegion !== ALL || filterPrograma !== ALL || filterAnio !== ALL;
 
   if (loading) {
-    return <LoadingOverlay message="Cargando dashboard..." />;
+    return (
+      <Card className={SURFACE_CLASS}>
+        <CardContent className="flex flex-col items-center gap-4 py-16">
+          <Spinner className="h-8 w-8 text-[#0058be]" />
+          <p className="text-sm text-[#3e4a3e]">Cargando dashboard...</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (!data || data.rows.length === 0) {
     return (
-      <Card className="border-gray-200">
-        <CardContent className="py-12 text-center text-gray-500">
-          No hay datos en la base de datos. Carga archivos para ver el dashboard.
+      <Card className={SURFACE_CLASS}>
+        <CardContent className="py-16 text-center">
+          <p className="font-home-display text-xl font-bold text-[#191c1d]">
+            Todavia no hay datos consolidados
+          </p>
+          <p className="mt-3 text-sm leading-6 text-[#3e4a3e]">
+            Carga archivos maestros para habilitar las visualizaciones y la
+            exportacion de la base consolidada.
+          </p>
         </CardContent>
       </Card>
     );
@@ -311,32 +370,55 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header + Export button */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-xl font-semibold text-gray-800">
-          Dashboard Estadístico
-        </h2>
-        <Button onClick={handleExportDb} variant="outline" disabled={exporting}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="font-home-label text-xs uppercase tracking-[0.28em] text-[#0058be]">
+            Visualizaciones activas
+          </p>
+          <h3 className="mt-3 font-home-display text-2xl font-bold text-[#191c1d]">
+            Panel de consulta y exportacion
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#3e4a3e]">
+            Filtra la base consolidada, revisa las metricas y exporta el
+            historico sin salir del flujo de trabajo.
+          </p>
+        </div>
+        <Button
+          onClick={handleExportDb}
+          disabled={exporting}
+          className="min-h-12 rounded-lg border border-[#00682f]/20 bg-white px-5 py-3 text-sm font-bold text-[#00682f] shadow-sm hover:bg-[#00682f] hover:text-white"
+        >
           {exporting ? (
             <>
-              <Spinner className="h-4 w-4 mr-2" />
+              <Spinner className="mr-2 h-4 w-4 text-current" />
               Descargando...
             </>
           ) : (
-            "Descargar Base de Datos (.xlsx)"
+            <>
+              <Download className="mr-2 size-4" />
+              Descargar Base de Datos (.xlsx)
+            </>
           )}
         </Button>
       </div>
 
       {/* ── Filters ────────────────────────────────────── */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500">Unidad Regional</label>
+      <Card className={SURFACE_CLASS}>
+        <CardContent className="py-6">
+          <div className="mb-5">
+            <p className="font-home-label text-xs uppercase tracking-[0.28em] text-[#6e7a6e]">
+              Filtros
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_180px_auto] xl:items-end">
+            <div className="flex flex-col gap-2">
+              <label className="font-home-label text-xs uppercase tracking-[0.18em] text-[#6e7a6e]">
+                Unidad Regional
+              </label>
               <select
                 value={filterRegion}
                 onChange={(e) => setFilterRegion(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 min-w-[180px]"
+                className={SELECT_CLASS}
               >
                 <option value={ALL}>Todas</option>
                 {data.regiones.map((r) => (
@@ -344,12 +426,14 @@ export function Dashboard() {
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500">Programa Académico</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-home-label text-xs uppercase tracking-[0.18em] text-[#6e7a6e]">
+                Programa Académico
+              </label>
               <select
                 value={filterPrograma}
                 onChange={(e) => setFilterPrograma(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 min-w-[280px]"
+                className={SELECT_CLASS}
               >
                 <option value={ALL}>Todos</option>
                 {data.programas.map((p) => (
@@ -357,12 +441,14 @@ export function Dashboard() {
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500">Año</label>
+            <div className="flex flex-col gap-2">
+              <label className="font-home-label text-xs uppercase tracking-[0.18em] text-[#6e7a6e]">
+                Año
+              </label>
               <select
                 value={filterAnio}
                 onChange={(e) => setFilterAnio(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 min-w-[100px]"
+                className={SELECT_CLASS}
               >
                 <option value={ALL}>Todos</option>
                 {data.anios.map((a) => (
@@ -371,70 +457,95 @@ export function Dashboard() {
               </select>
             </div>
             {hasFilters && (
-              <Button onClick={clearFilters} variant="ghost" className="text-sm text-gray-500">
+              <Button
+                onClick={clearFilters}
+                variant="ghost"
+                className="min-h-12 rounded-lg border border-transparent px-4 py-3 text-sm font-semibold text-[#3e4a3e] hover:border-[#bdcabb]/30 hover:bg-[#f3f4f5]"
+              >
                 Limpiar filtros
               </Button>
             )}
           </div>
-          {hasFilters && (
-            <p className="text-xs text-green-700 mt-2">
-              Filtros activos — mostrando {filtered.length.toLocaleString()} registros de {data.rows.length.toLocaleString()}
-            </p>
-          )}
+          <p className="mt-4 text-xs text-[#3e4a3e]">
+            {hasFilters
+              ? `Filtros activos: ${formatNumber(filtered.length)} registros de ${formatNumber(data.rows.length)} visibles.`
+              : `Sin filtros aplicados: ${formatNumber(data.rows.length)} registros disponibles.`}
+          </p>
         </CardContent>
       </Card>
 
       {filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-gray-500">
-            No hay datos para los filtros seleccionados.
+        <Card className={SURFACE_CLASS}>
+          <CardContent className="py-16 text-center">
+            <p className="font-home-display text-xl font-bold text-[#191c1d]">
+              No hay datos para los filtros seleccionados.
+            </p>
+            <p className="mt-3 text-sm leading-6 text-[#3e4a3e]">
+              Ajusta la región, el programa o el año para volver a cargar el
+              tablero.
+            </p>
           </CardContent>
         </Card>
       ) : (
         <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-5">
             {summaryCards.map((s) => (
-              <Card key={s.categoria} className="border-l-4" style={{ borderLeftColor: COLORS[s.categoria] }}>
-                <CardContent className="py-3 px-4">
-                  <p className="text-xs text-gray-500 font-medium">{s.categoria}</p>
-                  <p className="text-2xl font-bold" style={{ color: COLORS[s.categoria] }}>
-                    {s.current.toLocaleString()}
+              <Card
+                key={s.categoria}
+                className="rounded-[1.25rem] border border-[#d7ddda] border-l-4 bg-white shadow-[0_14px_32px_rgba(25,28,29,0.04)]"
+                style={{ borderLeftColor: COLORS[s.categoria] }}
+              >
+                <CardContent className="flex min-h-[150px] flex-col justify-center px-6 py-7">
+                  <p className="font-home-label text-sm text-[#3e4a3e]">
+                    {s.categoria}
                   </p>
-                  {s.change !== 0 && (
-                    <p className={`text-xs font-medium ${s.change > 0 ? "text-green-600" : "text-red-600"}`}>
-                      {s.change > 0 ? "+" : ""}{Math.round(s.change * 10) / 10}% vs periodo anterior
-                    </p>
-                  )}
+
+                  <p
+                    className="mt-3 font-home-display text-4xl font-extrabold leading-none"
+                    style={{ color: COLORS[s.categoria] }}
+                  >
+                    {formatNumber(s.current)}
+                  </p>
+
+                  {renderDelta(s.change)}
                 </CardContent>
               </Card>
             ))}
           </div>
 
           {/* Timeline chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Línea de Tiempo por Periodo Académico</CardTitle>
-              <CardDescription>
+          <Card className={SURFACE_CLASS}>
+            <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+              <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Línea de Tiempo por Periodo Académico</CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#3e4a3e]">
                 Total de estudiantes por categoría en cada periodo (eje X = año-periodo)
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6 pt-6">
               <ResponsiveContainer width="100%" height={380}>
                 <LineChart data={timelineData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="periodo" fontSize={11} angle={-30} textAnchor="end" height={60} />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
+                  <CartesianGrid stroke="#bdcabb" strokeDasharray="4 8" vertical={false} />
+                  <XAxis
+                    dataKey="periodo"
+                    angle={-30}
+                    axisLine={false}
+                    height={60}
+                    textAnchor="end"
+                    tick={AXIS_TICK}
+                    tickLine={false}
+                  />
+                  <YAxis axisLine={false} tick={AXIS_TICK} tickLine={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
                   {CATEGORIAS.map((cat) => (
                     <Line
                       key={cat}
                       type="monotone"
                       dataKey={cat}
                       stroke={COLORS[cat]}
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
+                      strokeWidth={3}
+                      dot={{ r: 3, fill: COLORS[cat] }}
+                      activeDot={{ r: 5, fill: COLORS[cat] }}
                       connectNulls
                     />
                   ))}
@@ -444,21 +555,29 @@ export function Dashboard() {
           </Card>
 
           {/* Area chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Distribución Acumulada por Periodo</CardTitle>
-              <CardDescription>
+          <Card className={SURFACE_CLASS}>
+            <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+              <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Distribución Acumulada por Periodo</CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#3e4a3e]">
                 Vista apilada para comparar proporciones entre categorías
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6 pt-6">
               <ResponsiveContainer width="100%" height={350}>
                 <AreaChart data={timelineData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="periodo" fontSize={11} angle={-30} textAnchor="end" height={60} />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
+                  <CartesianGrid stroke="#bdcabb" strokeDasharray="4 8" vertical={false} />
+                  <XAxis
+                    dataKey="periodo"
+                    angle={-30}
+                    axisLine={false}
+                    height={60}
+                    textAnchor="end"
+                    tick={AXIS_TICK}
+                    tickLine={false}
+                  />
+                  <YAxis axisLine={false} tick={AXIS_TICK} tickLine={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
                   {CATEGORIAS.map((cat) => (
                     <Area
                       key={cat}
@@ -467,7 +586,7 @@ export function Dashboard() {
                       stackId="1"
                       fill={COLORS[cat]}
                       stroke={COLORS[cat]}
-                      fillOpacity={0.4}
+                      fillOpacity={0.2}
                     />
                   ))}
                 </AreaChart>
@@ -476,45 +595,47 @@ export function Dashboard() {
           </Card>
 
           {/* Mean + Std Dev by Year */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Media y Desviación Estándar por Año</CardTitle>
-              <CardDescription>
+          <Card className={SURFACE_CLASS}>
+            <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+              <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Media y Desviación Estándar por Año</CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#3e4a3e]">
                 Promedio anual (barras) con desviación estándar entre periodos del mismo año
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6 pt-6">
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={yearlyStats}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="anio" />
-                  <YAxis />
+                  <CartesianGrid stroke="#bdcabb" strokeDasharray="4 8" vertical={false} />
+                  <XAxis dataKey="anio" axisLine={false} tick={AXIS_TICK} tickLine={false} />
+                  <YAxis axisLine={false} tick={AXIS_TICK} tickLine={false} />
                   <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
                     formatter={(value, name) => {
                       const cat = String(name).replace("_mean", "");
-                      return [Number(value).toLocaleString(), `Media ${cat}`];
+                      return [formatNumber(Number(value)), `Media ${cat}`];
                     }}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
                   {CATEGORIAS.map((cat) => (
                     <Bar
                       key={cat}
                       dataKey={`${cat}_mean`}
                       name={cat}
                       fill={COLORS[cat]}
-                      fillOpacity={0.8}
+                      fillOpacity={0.85}
+                      radius={[8, 8, 0, 0]}
                     />
                   ))}
                 </BarChart>
               </ResponsiveContainer>
 
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
+              <div className="mt-6 overflow-x-auto rounded-xl border border-[#bdcabb]/15">
+                <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-3 font-medium text-gray-600">Año</th>
+                    <tr className="border-b border-[#bdcabb]/20 bg-[#f3f4f5]">
+                      <th className="px-4 py-3 text-left font-home-label text-xs uppercase tracking-[0.18em] text-[#6e7a6e]">Año</th>
                       {CATEGORIAS.map((cat) => (
-                        <th key={cat} className="text-right py-2 px-3 font-medium" style={{ color: COLORS[cat] }}>
+                        <th key={cat} className="px-4 py-3 text-right font-home-label text-xs uppercase tracking-[0.18em]" style={{ color: COLORS[cat] }}>
                           σ {cat}
                         </th>
                       ))}
@@ -522,11 +643,11 @@ export function Dashboard() {
                   </thead>
                   <tbody>
                     {yearlyStats.map((row) => (
-                      <tr key={row.anio as string} className="border-b border-gray-100">
-                        <td className="py-2 px-3 font-medium">{row.anio}</td>
+                      <tr key={row.anio as string} className="border-b border-[#bdcabb]/15 last:border-b-0">
+                        <td className="px-4 py-3 font-semibold text-[#191c1d]">{row.anio}</td>
                         {CATEGORIAS.map((cat) => (
-                          <td key={cat} className="text-right py-2 px-3 text-gray-700">
-                            {(row[`${cat}_std`] as number).toLocaleString()}
+                          <td key={cat} className="px-4 py-3 text-right text-[#3e4a3e]">
+                            {formatNumber(row[`${cat}_std`] as number)}
                           </td>
                         ))}
                       </tr>
@@ -538,46 +659,46 @@ export function Dashboard() {
           </Card>
 
           {/* Stats by Period type */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Estadísticas por Tipo de Periodo</CardTitle>
-              <CardDescription>
+          <Card className={SURFACE_CLASS}>
+            <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+              <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Estadísticas por Tipo de Periodo</CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#3e4a3e]">
                 Media y desviación estándar agrupadas por IPA y IIPA a lo largo de los años
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
+            <CardContent className="px-6 pb-6 pt-6">
+              <div className="overflow-x-auto rounded-xl border border-[#bdcabb]/15">
+                <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-3 font-medium text-gray-600">Periodo</th>
+                    <tr className="border-b border-[#bdcabb]/20">
+                      <th className="px-4 py-4 text-left font-home-label text-xs uppercase tracking-[0.18em] text-[#6e7a6e]">Periodo</th>
                       {CATEGORIAS.map((cat) => (
-                        <th key={cat} colSpan={2} className="text-center py-2 px-3 font-medium" style={{ color: COLORS[cat] }}>
+                        <th key={cat} colSpan={2} className="px-4 py-4 text-center font-home-label text-xs uppercase tracking-[0.18em]" style={{ color: COLORS[cat] }}>
                           {cat}
                         </th>
                       ))}
                     </tr>
-                    <tr className="border-b bg-gray-50">
+                    <tr className="border-b border-[#bdcabb]/15 bg-[#f3f4f5]">
                       <th />
                       {CATEGORIAS.map((cat) => (
                         <Fragment key={cat}>
-                          <th className="text-right py-1 px-2 text-xs text-gray-500">μ</th>
-                          <th className="text-right py-1 px-2 text-xs text-gray-500">σ</th>
+                          <th className="px-3 py-2 text-right font-home-label text-[11px] uppercase tracking-[0.18em] text-[#6e7a6e]">μ</th>
+                          <th className="px-3 py-2 text-right font-home-label text-[11px] uppercase tracking-[0.18em] text-[#6e7a6e]">σ</th>
                         </Fragment>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {periodStats.map((row) => (
-                      <tr key={row.periodo as string} className="border-b border-gray-100">
-                        <td className="py-2 px-3 font-medium">{row.periodo}</td>
+                      <tr key={row.periodo as string} className="border-b border-[#bdcabb]/15 last:border-b-0">
+                        <td className="px-4 py-3 font-semibold text-[#191c1d]">{row.periodo}</td>
                         {CATEGORIAS.map((cat) => (
                           <Fragment key={cat}>
-                            <td className="text-right py-2 px-2 text-gray-700">
-                              {(row[`${cat}_mean`] as number).toLocaleString()}
+                            <td className="px-3 py-3 text-right text-[#191c1d]">
+                              {formatNumber(row[`${cat}_mean`] as number)}
                             </td>
-                            <td className="text-right py-2 px-2 text-gray-500">
-                              {(row[`${cat}_std`] as number).toLocaleString()}
+                            <td className="px-3 py-3 text-right text-[#6e7a6e]">
+                              {formatNumber(row[`${cat}_std`] as number)}
                             </td>
                           </Fragment>
                         ))}
@@ -591,23 +712,34 @@ export function Dashboard() {
 
           {/* Growth rate chart */}
           {growthData.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Tasa de Crecimiento Interanual (%)</CardTitle>
-                <CardDescription>
+            <Card className={SURFACE_CLASS}>
+              <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+                <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Tasa de Crecimiento Interanual (%)</CardTitle>
+                <CardDescription className="text-sm leading-6 text-[#3e4a3e]">
                   Variación porcentual año a año por categoría
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-6 pb-6 pt-6">
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={growthData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="anio" />
-                    <YAxis tickFormatter={(v) => `${v}%`} />
-                    <Tooltip formatter={(v) => [`${v}%`, ""]} />
-                    <Legend />
+                    <CartesianGrid stroke="#bdcabb" strokeDasharray="4 8" vertical={false} />
+                    <XAxis dataKey="anio" axisLine={false} tick={AXIS_TICK} tickLine={false} />
+                    <YAxis
+                      axisLine={false}
+                      tick={AXIS_TICK}
+                      tickFormatter={(v) => `${v}%`}
+                      tickLine={false}
+                    />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, ""]} />
+                    <Legend wrapperStyle={LEGEND_STYLE} />
                     {CATEGORIAS.map((cat) => (
-                      <Bar key={cat} dataKey={cat} fill={COLORS[cat]} fillOpacity={0.75} />
+                      <Bar
+                        key={cat}
+                        dataKey={cat}
+                        fill={COLORS[cat]}
+                        fillOpacity={0.8}
+                        radius={[8, 8, 0, 0]}
+                      />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
@@ -616,17 +748,17 @@ export function Dashboard() {
           )}
 
           {/* Radar chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Distribución por Unidad Regional</CardTitle>
-              <CardDescription>Comparación de categorías entre sedes</CardDescription>
+          <Card className={SURFACE_CLASS}>
+            <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+              <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Distribución por Unidad Regional</CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#3e4a3e]">Comparación de categorías entre sedes</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6 pt-6">
               <ResponsiveContainer width="100%" height={400}>
                 <RadarChart data={radarData}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="region" fontSize={11} />
-                  <PolarRadiusAxis fontSize={10} />
+                  <PolarGrid stroke="#bdcabb" />
+                  <PolarAngleAxis dataKey="region" tick={{ fill: "#3e4a3e", fontSize: 11 }} />
+                  <PolarRadiusAxis tick={{ fill: "#6e7a6e", fontSize: 10 }} />
                   {CATEGORIAS.map((cat) => (
                     <Radar
                       key={cat}
@@ -634,52 +766,70 @@ export function Dashboard() {
                       dataKey={cat}
                       stroke={COLORS[cat]}
                       fill={COLORS[cat]}
-                      fillOpacity={0.15}
+                      fillOpacity={0.12}
                     />
                   ))}
-                  <Legend />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
                 </RadarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           {/* Top 10 Programs */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Top 10 Programas Académicos</CardTitle>
-              <CardDescription>
+          <Card className={SURFACE_CLASS}>
+            <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+              <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Top 10 Programas Académicos</CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#3e4a3e]">
                 Programas con mayor cantidad total de estudiantes (todas las categorías)
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6 pt-6">
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={topPrograms} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="programa" type="category" width={280} fontSize={11} tick={{ fill: "#374151" }} />
-                  <Tooltip />
-                  <Bar dataKey="total" fill="#16a34a" name="Total estudiantes" />
+                  <CartesianGrid stroke="#bdcabb" strokeDasharray="4 8" vertical={false} />
+                  <XAxis type="number" axisLine={false} tick={AXIS_TICK} tickLine={false} />
+                  <YAxis
+                    dataKey="programa"
+                    type="category"
+                    width={280}
+                    axisLine={false}
+                    tick={{ fill: "#3e4a3e", fontSize: 11 }}
+                    tickLine={false}
+                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar
+                    dataKey="total"
+                    fill="#00843d"
+                    name="Total estudiantes"
+                    radius={[0, 8, 8, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           {/* Nivel distribution */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Distribución por Nivel de Formación</CardTitle>
-              <CardDescription>Pregrado, Tecnología y Posgrado por categoría</CardDescription>
+          <Card className={SURFACE_CLASS}>
+            <CardHeader className="border-b border-[#bdcabb]/10 pb-6">
+              <CardTitle className="font-home-display text-xl font-bold text-[#191c1d]">Distribución por Nivel de Formación</CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#3e4a3e]">Pregrado, Tecnología y Posgrado por categoría</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6 pb-6 pt-6">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={nivelChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="nivel" fontSize={12} />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
+                  <CartesianGrid stroke="#bdcabb" strokeDasharray="4 8" vertical={false} />
+                  <XAxis dataKey="nivel" axisLine={false} tick={AXIS_TICK} tickLine={false} />
+                  <YAxis axisLine={false} tick={AXIS_TICK} tickLine={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
                   {CATEGORIAS.map((cat) => (
-                    <Bar key={cat} dataKey={cat} fill={COLORS[cat]} fillOpacity={0.8} />
+                    <Bar
+                      key={cat}
+                      dataKey={cat}
+                      fill={COLORS[cat]}
+                      fillOpacity={0.85}
+                      radius={[8, 8, 0, 0]}
+                    />
                   ))}
                 </BarChart>
               </ResponsiveContainer>

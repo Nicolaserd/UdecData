@@ -1,5 +1,8 @@
 import * as XLSX from "xlsx";
 import { EstudiantesRow } from "../types";
+import { normalizeProgram } from "../normalization/program-normalizer";
+import { mapMunicipio } from "../normalization/municipio-mapper";
+import { resolveNivel } from "../normalization/nivel-resolver";
 
 interface EstudiantesRaw {
   "Categoría": string;
@@ -26,19 +29,26 @@ export function parseEstudiantesHistorico(
 
   for (const row of rawData) {
     const categoria = String(row["Categoría"] || "").trim();
-    const unidadRegional = String(row["Unidad regional"] || "").trim();
-    const nivelRaw = String(row["Nivel"] || "").trim();
-    const nivelAcademicoRaw = String(row["Nivel académico"] || "").trim();
-    // Normalize capitalization: "pregrado" → "Pregrado", "posgrado" → "Posgrado"
-    const nivel = nivelRaw.charAt(0).toUpperCase() + nivelRaw.slice(1).toLowerCase();
-    const nivelAcademico = nivelAcademicoRaw.charAt(0).toUpperCase() + nivelAcademicoRaw.slice(1).toLowerCase();
-    const programaAcademico = String(row["Programa académico"] || "").trim();
+    const unidadRegionalRaw = String(row["Unidad regional"] || "").trim();
+    const programaRaw = String(row["Programa académico"] || "").trim();
     const cantidad = Number(row["Cantidad"]) || 0;
     const año = Number(row["Año"]) || 0;
     const periodo = String(row["Periodo"] || "").trim();
 
-    if (!categoria || !unidadRegional || !programaAcademico || !año || !periodo)
+    if (!categoria || !unidadRegionalRaw || !programaRaw || !año || !periodo)
       continue;
+
+    // Normalize program name through fuzzy matcher
+    const { name: programaAcademico, matched: progMatched } = normalizeProgram(programaRaw);
+    if (!progMatched) {
+      warnings.push(`Histórico: programa no reconocido "${programaRaw}"`);
+    }
+
+    // Normalize unidad regional through fuzzy matcher
+    const { unidadRegional } = mapMunicipio(unidadRegionalRaw);
+
+    // Resolve nivel from program name (consistent with other parsers)
+    const { nivel, nivelAcademico } = resolveNivel(programaRaw);
 
     rows.push({
       categoria: categoria as EstudiantesRow["categoria"],

@@ -5,7 +5,9 @@
       "Bash(npm install:*)",
       "Bash(npx shadcn@latest add button card table progress badge -y)",
       "Bash(grep -iv \"^PROGRAMA$\")",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(npx next:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

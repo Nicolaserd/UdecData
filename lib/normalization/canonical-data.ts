@@ -43,6 +43,25 @@ export const CANONICAL_PROGRAMS: string[] = [
   "Licenciatura en Educación Básica con Énfasis en Educación Física, Recreación y Deportes",
   "Maestría en Ciencias Ambientales",
   "Maestría en Educación",
+  "Administración Agropecuaria",
+  "Administración del Medio Ambiente",
+  "Ciencias del Deporte y de la Educación Física",
+  "Especialización en Gerencia de Servicios de Salud",
+  "Especialización en Negocios y Comercio Electrónico",
+  "Especialización en Nutrición y Alimentación Animal",
+  "Especialización en Nutrición y Alimentación Animal de Especies No Convencionales",
+  "Especialización en Procesos Pedagógicos del Entrenamiento Deportivo",
+  "Especialización en Sistemas de Información Geográfica Aplicado a la Gestión del Territorio",
+  "Licenciatura en Ciencias Sociales, Constitución y Democracia",
+  "Licenciatura en Educación Básica con Énfasis en Humanidades: Lengua Castellana e Inglés",
+  "Licenciatura en Física",
+  "Licenciatura en Lenguas Modernas Español-Inglés",
+  "Licenciatura en Matemáticas y Física",
+  "Maestría en Gestión Ambiental para el Desarrollo Sostenible",
+  "Maestría en Gestión Estratégica en Nutrición y Alimentación Animal",
+  "Profesional en Ciencias del Deporte y la Educación Física",
+  "Tecnología en Cartografía",
+  "Tecnología Pecuaria",
 ];
 
 // Only the CORRECT canonical unidad regional names
@@ -71,7 +90,7 @@ export const NIVEL_ACADEMICO_RULES: Array<{
   { pattern: /^DOCTORADO/i, nivel: "Posgrado", nivelAcademico: "Doctorado" },
   { pattern: /^MAESTR[IÍ]A/i, nivel: "Posgrado", nivelAcademico: "Maestría" },
   { pattern: /^ESPECIALIZACI[OÓ]N/i, nivel: "Posgrado", nivelAcademico: "Especialización" },
-  { pattern: /^TECNOLOG[IÍ]A/i, nivel: "Tecnología", nivelAcademico: "Tecnología" },
+  { pattern: /^TECNOLOG[IÍ]A/i, nivel: "Pregrado", nivelAcademico: "Tecnología" },
 ];
 
 export const DEFAULT_NIVEL = "Pregrado";
