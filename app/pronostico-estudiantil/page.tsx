@@ -151,6 +151,11 @@ export default function PronosticoEstudiantilPage() {
   const firstForecastLabel = data?.chartData.find((d) => d.tipo === "pronostico")?.label;
   const categoriasDisponibles = data?.categorias ?? ["Matriculados", "Inscritos", "Primiparos", "Admitidos"];
   const summary = data?.summary;
+  const historicalPeriodsCount = data?.chartData.filter((d) => d.tipo === "historico").length;
+  const historicalPeriodsDisplay =
+    !loading && historicalPeriodsCount != null
+      ? historicalPeriodsCount.toLocaleString("es-CO")
+      : "--";
 
   return (
     <main className="min-h-screen flex-1 bg-[#f8f9fa] pt-16 font-home-body text-[#191c1d]">
@@ -463,11 +468,15 @@ export default function PronosticoEstudiantilPage() {
 
             <div className="flex flex-col gap-1">
               <span className="font-home-label text-[10px] font-bold uppercase tracking-widest text-[#6e7a6e]">
-                Confianza Estadística
+                <span>Base Hist&oacute;rica</span>
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="font-home-display text-3xl font-extrabold text-[#0058be]">Alta</span>
-                <span className="text-xs font-medium text-[#6e7a6e]">(P &lt; 0.05)</span>
+                <span className="font-home-display text-3xl font-extrabold text-[#0058be]">
+                  {historicalPeriodsDisplay}
+                </span>
+                <span className="text-xs font-medium text-[#6e7a6e]">
+                  {historicalPeriodsCount === 1 ? "periodo real" : "periodos reales"}
+                </span>
               </div>
             </div>
           </div>
