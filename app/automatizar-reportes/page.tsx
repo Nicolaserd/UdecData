@@ -59,13 +59,19 @@ export default function AutomatizarReportesPage() {
                 <ChevronDown className="size-4" />
               </button>
 
-              <div className="invisible absolute left-0 top-full z-50 w-48 pt-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+              <div className="invisible absolute left-0 top-full z-50 w-64 pt-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                 <div className="overflow-hidden rounded-[0.5rem] border border-neutral-200/50 bg-white shadow-xl">
                   <Link
                     href="/automatizar-reportes"
-                    className="block px-4 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                    className="block bg-[#00682f]/5 px-4 py-3 text-sm font-semibold text-[#00682f] transition-colors hover:bg-[#00682f]/10"
                   >
                     Automatizar Reportes para Boletín
+                  </Link>
+                  <Link
+                    href="/pronostico-estudiantil"
+                    className="block px-4 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                  >
+                    Pronóstico de Población Estudiantil
                   </Link>
                 </div>
               </div>
@@ -113,7 +119,7 @@ export default function AutomatizarReportesPage() {
                 type="button"
                 onClick={handleProcessAll}
                 disabled={!uploadStatus.requiredReady || uploadStatus.processing}
-                className="font-home-display inline-flex min-w-[220px] items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-8 py-4 font-bold text-white shadow-[0_20px_40px_rgba(0,104,47,0.15)] transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
+                className="font-home-display inline-flex min-w-40 items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-8 py-4 font-bold text-white shadow-[0_20px_40px_rgba(0,104,47,0.15)] transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {uploadStatus.processing ? (
                   <>
@@ -121,7 +127,7 @@ export default function AutomatizarReportesPage() {
                     Procesando...
                   </>
                 ) : (
-                  "Procesar Todo"
+                  "Procesar"
                 )}
               </button>
             </div>

@@ -23,14 +23,14 @@ export async function POST(request: NextRequest) {
     const estudiantesFile = formData.get("estudiantes") as File | null;
 
     if (
-      !matriculadosFile ||
-      !admitidosFile ||
-      !primiparosFile ||
-      !inscritosFile ||
+      !matriculadosFile &&
+      !admitidosFile &&
+      !primiparosFile &&
+      !inscritosFile &&
       !graduadosFile
     ) {
       return NextResponse.json(
-        { error: "Se requieren los 5 archivos de reporte" },
+        { error: "Se requiere al menos un archivo de reporte" },
         { status: 400 }
       );
     }
@@ -38,36 +38,41 @@ export async function POST(request: NextRequest) {
     const allRows: NormalizedStudentRow[] = [];
     const allWarnings: string[] = [];
 
-    // Read all files - auto-detect CSV or Excel format
-    const [matriculadosText, admitidosText, primiparosText, inscritosText, graduadosText] =
-      await Promise.all([
-        readFileAsCSV(matriculadosFile),
-        readFileAsCSV(admitidosFile),
-        readFileAsCSV(primiparosFile),
-        readFileAsCSV(inscritosFile),
-        readFileAsCSV(graduadosFile),
-      ]);
+    // Solo procesar los archivos que fueron enviados
+    if (matriculadosFile) {
+      const text = await readFileAsCSV(matriculadosFile);
+      const result = parseMatriculados(text);
+      allRows.push(...result.rows);
+      allWarnings.push(...result.warnings);
+    }
 
-    const matriculados = parseMatriculados(matriculadosText);
-    allRows.push(...matriculados.rows);
-    allWarnings.push(...matriculados.warnings);
+    if (admitidosFile) {
+      const text = await readFileAsCSV(admitidosFile);
+      const result = parseAdmitidos(text);
+      allRows.push(...result.rows);
+      allWarnings.push(...result.warnings);
+    }
 
-    const admitidos = parseAdmitidos(admitidosText);
-    allRows.push(...admitidos.rows);
-    allWarnings.push(...admitidos.warnings);
+    if (primiparosFile) {
+      const text = await readFileAsCSV(primiparosFile);
+      const result = parsePrimiparos(text);
+      allRows.push(...result.rows);
+      allWarnings.push(...result.warnings);
+    }
 
-    const primiparos = parsePrimiparos(primiparosText);
-    allRows.push(...primiparos.rows);
-    allWarnings.push(...primiparos.warnings);
+    if (inscritosFile) {
+      const text = await readFileAsCSV(inscritosFile);
+      const result = parseInscritos(text);
+      allRows.push(...result.rows);
+      allWarnings.push(...result.warnings);
+    }
 
-    // parseInscritos now receives CSV text (same as others)
-    const inscritos = parseInscritos(inscritosText);
-    allRows.push(...inscritos.rows);
-    allWarnings.push(...inscritos.warnings);
-
-    const graduados = parseGraduados(graduadosText);
-    allRows.push(...graduados.rows);
-    allWarnings.push(...graduados.warnings);
+    if (graduadosFile) {
+      const text = await readFileAsCSV(graduadosFile);
+      const result = parseGraduados(text);
+      allRows.push(...result.rows);
+      allWarnings.push(...result.warnings);
+    }
 
     // Parse historical data if provided
     let historico;

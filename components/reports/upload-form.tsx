@@ -23,6 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { FileUploadZone } from "./file-upload-zone";
 import { ResultsTable } from "./results-table";
 import { ConfirmOverwrite } from "./confirm-overwrite";
+import { PinModal } from "./pin-modal";
 
 type AggregatedRow = Record<string, string | number>;
 
@@ -44,7 +45,7 @@ interface UploadFormProps {
   onStatusChange?: (status: UploadFormStatus) => void;
 }
 
-interface RequiredFileConfig {
+interface FileConfig {
   key: string;
   label: string;
   accept: string;
@@ -52,11 +53,13 @@ interface RequiredFileConfig {
   requiredColumns: readonly string[];
   icon: LucideIcon;
   tone?: "primary" | "secondary";
+  optional?: boolean;
+  categoria: string | null; // null = no genera categoría propia
 }
 
 const ACCEPT_ALL = ".csv,.xlsx,.xls";
 
-const REQUIRED_FILES: readonly RequiredFileConfig[] = [
+const FILE_CONFIGS: readonly FileConfig[] = [
   {
     key: "matriculados",
     label: "Matriculados",
@@ -64,6 +67,7 @@ const REQUIRED_FILES: readonly RequiredFileConfig[] = [
     description: "Formato CSV o XLSX",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO"],
     icon: Users,
+    categoria: "Matriculados",
   },
   {
     key: "admitidos",
@@ -72,6 +76,7 @@ const REQUIRED_FILES: readonly RequiredFileConfig[] = [
     description: "Reporte Admisiones",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO"],
     icon: UserPlus,
+    categoria: "Admitidos",
   },
   {
     key: "primiparos",
@@ -80,6 +85,7 @@ const REQUIRED_FILES: readonly RequiredFileConfig[] = [
     description: "Primer semestre",
     requiredColumns: ["AÑO", "SEMESTRE", "NOMBRE PROGRAMA", "MUNICIPIO"],
     icon: GraduationCap,
+    categoria: "Primiparos",
   },
   {
     key: "inscritos",
@@ -88,6 +94,7 @@ const REQUIRED_FILES: readonly RequiredFileConfig[] = [
     description: "Base de postulantes",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO"],
     icon: AppWindow,
+    categoria: "Inscritos",
   },
   {
     key: "graduados",
@@ -96,6 +103,7 @@ const REQUIRED_FILES: readonly RequiredFileConfig[] = [
     description: "Consolidado títulos",
     requiredColumns: ["AÑO", "SEMESTRE", "PROGRAMA", "MUNICIPIO PROGRAMA"],
     icon: Award,
+    categoria: "Graduados",
   },
   {
     key: "estudiantes",
@@ -114,16 +122,13 @@ const REQUIRED_FILES: readonly RequiredFileConfig[] = [
     ],
     icon: History,
     tone: "secondary",
+    optional: true,
+    categoria: null,
   },
 ];
 
-const ALL_CATEGORIES = [
-  "Matriculados",
-  "Admitidos",
-  "Primiparos",
-  "Inscritos",
-  "Graduados",
-];
+// Orden de prioridad para leer el año/periodo del archivo
+const PERIOD_DETECTION_ORDER = ["matriculados", "admitidos", "inscritos", "primiparos", "graduados"];
 
 export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
   function UploadForm({ onStatusChange }, ref) {
@@ -147,20 +152,20 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
       skippedCount: number;
     } | null>(null);
 
+    const [showPin, setShowPin] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
-    const [existingCategories, setExistingCategories] = useState<
-      ExistingCategory[]
-    >([]);
+    const [existingCategories, setExistingCategories] = useState<ExistingCategory[]>([]);
     const [detectedAnio, setDetectedAnio] = useState<number>(0);
     const [detectedPeriodo, setDetectedPeriodo] = useState<string>("");
 
-    const requiredReady = REQUIRED_FILES.filter(
-      (file) => file.key !== "estudiantes"
-    ).every((file) => files[file.key] !== null);
+    // Al menos un archivo no-opcional cargado
+    const anyReady = FILE_CONFIGS.filter((f) => !f.optional).some(
+      (f) => files[f.key] !== null
+    );
 
     useEffect(() => {
-      onStatusChange?.({ processing, requiredReady });
-    }, [onStatusChange, processing, requiredReady]);
+      onStatusChange?.({ processing, requiredReady: anyReady });
+    }, [onStatusChange, processing, anyReady]);
 
     const handleFileSelected = (key: string, file: File) => {
       setFiles((prev) => ({ ...prev, [key]: file }));
@@ -168,16 +173,50 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
     const readAsCSV = async (file: File): Promise<string> => {
       const ext = file.name.toLowerCase().split(".").pop() ?? "";
-      if (ext === "csv" || ext === "txt") {
-        return await file.text();
-      }
-
+      if (ext === "csv" || ext === "txt") return await file.text();
       const { default: XLSX } = await import("xlsx");
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       return XLSX.utils.sheet_to_csv(worksheet, { FS: ";" });
     };
+
+    /** Detecta año y periodo del primer archivo disponible en el orden de prioridad */
+    const detectPeriod = async (): Promise<{ anio: number; periodo: string } | null> => {
+      for (const key of PERIOD_DETECTION_ORDER) {
+        if (!files[key]) continue;
+        try {
+          const csvText = await readAsCSV(files[key]!);
+          const lines = csvText.split(/\r?\n/);
+          const headerLine = lines[0]?.replace(/^\uFEFF/, "") ?? "";
+          const firstDataLine = lines[1];
+          if (!firstDataLine) continue;
+
+          const headers = headerLine.split(";").map((h) => h.replace(/"/g, "").trim());
+          const fields = firstDataLine.split(";").map((f) => f.replace(/"/g, "").trim());
+
+          const anioIdx = headers.findIndex(
+            (h) => h === "AÑO" || h === "ÁÑO" || h.includes("AÑO") || h.includes("ÑO")
+          );
+          const semIdx = headers.findIndex((h) => h === "SEMESTRE");
+
+          let anio = anioIdx >= 0 ? parseInt(fields[anioIdx], 10) : parseInt(fields[2], 10);
+          let semestre = semIdx >= 0 ? parseInt(fields[semIdx], 10) : parseInt(fields[3], 10);
+
+          if (isNaN(anio) || anio < 2000) continue;
+          const periodo = semestre === 1 ? "IPA" : semestre === 2 ? "IIPA" : String(semestre);
+          return { anio, periodo };
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    };
+
+    /** Categorías cargadas actualmente (excluye "estudiantes" que no tiene categoría) */
+    const loadedCategories = FILE_CONFIGS.filter(
+      (f) => f.categoria !== null && files[f.key] !== null
+    ).map((f) => f.categoria as string);
 
     const processFiles = useCallback(
       async (allowedCategories: string[]) => {
@@ -187,19 +226,14 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
         try {
           const formData = new FormData();
-          formData.append("matriculados", files.matriculados!);
-          formData.append("admitidos", files.admitidos!);
-          formData.append("primiparos", files.primiparos!);
-          formData.append("inscritos", files.inscritos!);
-          formData.append("graduados", files.graduados!);
-          formData.append(
-            "allowedCategories",
-            JSON.stringify(allowedCategories)
-          );
 
-          if (files.estudiantes) {
-            formData.append("estudiantes", files.estudiantes);
+          // Solo incluir archivos que están cargados
+          for (const config of FILE_CONFIGS) {
+            if (files[config.key]) {
+              formData.append(config.key, files[config.key]!);
+            }
           }
+          formData.append("allowedCategories", JSON.stringify(allowedCategories));
 
           setProgress(40);
 
@@ -215,33 +249,16 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
             throw new Error(error.error || "Error procesando archivos");
           }
 
-          const totalProcessed = parseInt(
-            response.headers.get("X-Total-Processed") || "0"
-          );
-          const totalAggregated = parseInt(
-            response.headers.get("X-Total-Aggregated") || "0"
-          );
-          const warnings = JSON.parse(
-            response.headers.get("X-Warnings") || "[]"
-          ) as string[];
-          const supabaseSaved =
-            response.headers.get("X-Supabase-Saved") === "true";
-          const savedCount = parseInt(
-            response.headers.get("X-Supabase-Saved-Count") || "0"
-          );
-          const skippedCount = parseInt(
-            response.headers.get("X-Supabase-Skipped-Count") || "0"
-          );
+          const totalProcessed = parseInt(response.headers.get("X-Total-Processed") || "0");
+          const totalAggregated = parseInt(response.headers.get("X-Total-Aggregated") || "0");
+          const warnings = JSON.parse(response.headers.get("X-Warnings") || "[]") as string[];
+          const supabaseSaved = response.headers.get("X-Supabase-Saved") === "true";
+          const savedCount = parseInt(response.headers.get("X-Supabase-Saved-Count") || "0");
+          const skippedCount = parseInt(response.headers.get("X-Supabase-Skipped-Count") || "0");
 
           const blob = await response.blob();
           setXlsxBlob(blob);
-          setStats({
-            totalProcessed,
-            totalAggregated,
-            supabaseSaved,
-            savedCount,
-            skippedCount,
-          });
+          setStats({ totalProcessed, totalAggregated, supabaseSaved, savedCount, skippedCount });
 
           const { default: XLSX } = await import("xlsx");
           const buffer = await blob.arrayBuffer();
@@ -252,24 +269,17 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
           setProgress(100);
 
-          if (warnings.length > 0) {
-            warnings.forEach((warning) => toast.warning(warning));
-          }
-
+          if (warnings.length > 0) warnings.forEach((w) => toast.warning(w));
           if (supabaseSaved) {
             toast.success(
-              `Guardados ${savedCount} registros en Supabase${skippedCount > 0 ? ` (${skippedCount} omitidos)` : ""}`
+              `Guardados ${savedCount} registros en la base de datos${skippedCount > 0 ? ` (${skippedCount} omitidos)` : ""}`
             );
           } else {
             toast.info("Datos no guardados en la base de datos.");
           }
-
-          toast.success(
-            `Procesados ${totalProcessed} registros en ${totalAggregated} grupos`
-          );
+          toast.success(`Procesados ${totalProcessed} registros en ${totalAggregated} grupos`);
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Error desconocido";
+          const message = error instanceof Error ? error.message : "Error desconocido";
           toast.error(message);
         } finally {
           setProcessing(false);
@@ -278,9 +288,8 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
       [files]
     );
 
-    const handleSubmit = useCallback(async () => {
-      if (!requiredReady) return;
-
+    /** Paso 2: después de que el PIN es válido, verificar duplicados y procesar */
+    const handleAfterPin = useCallback(async () => {
       setProcessing(true);
       setProgress(5);
       setResults(null);
@@ -288,41 +297,12 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
       setStats(null);
 
       try {
-        const csvText = await readAsCSV(files.matriculados!);
-        const firstDataLine = csvText.split(/\r?\n/)[1];
-
-        if (!firstDataLine) {
-          throw new Error("Archivo de Matriculados vacío");
+        const detected = await detectPeriod();
+        if (!detected) {
+          throw new Error("No se pudo detectar el año/periodo de ningún archivo cargado");
         }
 
-        const fields = firstDataLine
-          .split(";")
-          .map((field) => field.replace(/"/g, "").trim());
-        const headerLine = csvText.split(/\r?\n/)[0].replace(/^\uFEFF/, "");
-        const headers = headerLine
-          .split(";")
-          .map((header) => header.replace(/"/g, "").trim());
-        const anioIdx = headers.findIndex(
-          (header) =>
-            header === "AÑO" ||
-            header === "ÁÑO" ||
-            header.includes("AÑO") ||
-            header.includes("ÑO")
-        );
-        const semIdx = headers.findIndex((header) => header === "SEMESTRE");
-
-        let anio = 0;
-        let semestre = 0;
-
-        if (anioIdx >= 0) anio = parseInt(fields[anioIdx], 10);
-        if (semIdx >= 0) semestre = parseInt(fields[semIdx], 10);
-
-        if (isNaN(anio) || anio < 2000) anio = parseInt(fields[2], 10);
-        if (isNaN(semestre)) semestre = parseInt(fields[3], 10);
-
-        const periodo =
-          semestre === 1 ? "IPA" : semestre === 2 ? "IIPA" : String(semestre);
-
+        const { anio, periodo } = detected;
         setDetectedAnio(anio);
         setDetectedPeriodo(periodo);
 
@@ -337,30 +317,53 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
             categories: ExistingCategory[];
           };
 
-          if (categories.length > 0) {
-            setExistingCategories(categories);
+          // Solo mostrar conflicto para las categorías que se van a procesar
+          const conflicting = categories.filter((c) =>
+            loadedCategories.includes(c.categoria)
+          );
+
+          if (conflicting.length > 0) {
+            setExistingCategories(conflicting);
             setShowConfirm(true);
             setProcessing(false);
             return;
           }
         }
 
-        await processFiles(ALL_CATEGORIES);
+        await processFiles(loadedCategories);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Error desconocido";
+        const message = error instanceof Error ? error.message : "Error desconocido";
         toast.error(message);
         setProcessing(false);
       }
-    }, [files.matriculados, processFiles, requiredReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [files, loadedCategories, processFiles]);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        submit: handleSubmit,
-      }),
-      [handleSubmit]
+    /** Paso 1: mostrar el modal de PIN */
+    const handleSubmit = useCallback(async () => {
+      if (!anyReady) return;
+      setShowPin(true);
+    }, [anyReady]);
+
+    /** Validar PIN contra la API y continuar si es correcto */
+    const handlePinConfirm = useCallback(
+      async (pin: string): Promise<boolean> => {
+        const res = await fetch("/api/verify-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin }),
+        });
+        const { valid } = (await res.json()) as { valid: boolean };
+        if (valid) {
+          setShowPin(false);
+          await handleAfterPin();
+        }
+        return valid;
+      },
+      [handleAfterPin]
     );
+
+    useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
     const handleConfirm = (selectedCategories: string[]) => {
       void processFiles(selectedCategories);
@@ -383,8 +386,16 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
     return (
       <div className="space-y-8">
+        {/* Modal PIN */}
+        {showPin && (
+          <PinModal
+            onConfirm={handlePinConfirm}
+            onCancel={() => setShowPin(false)}
+          />
+        )}
+
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {REQUIRED_FILES.map((config) => (
+          {FILE_CONFIGS.map((config) => (
             <FileUploadZone
               key={config.key}
               label={config.label}
@@ -404,7 +415,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
             anio={detectedAnio}
             periodo={detectedPeriodo}
             existingCategories={existingCategories}
-            allCategories={ALL_CATEGORIES}
+            allCategories={loadedCategories}
             onConfirm={handleConfirm}
             onCancel={handleCancelConfirm}
           />
@@ -427,9 +438,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
               </p>
             </div>
             <Progress value={progress} className="h-2 bg-white" />
-            <p className="mt-2 text-xs text-[#3e4a3e]">
-              {progress}% completado
-            </p>
+            <p className="mt-2 text-xs text-[#3e4a3e]">{progress}% completado</p>
           </div>
         )}
 
@@ -481,7 +490,6 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
                 </Button>
               </div>
             )}
-
             {results && <ResultsTable data={results} />}
           </div>
         )}
