@@ -2,19 +2,17 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Bell,
-  ChevronDown,
   Clock3,
   ExternalLink,
   FileText,
   Headset,
   LineChart,
   PlusCircle,
-  Settings,
   Sparkles,
   TrendingUp,
   Workflow,
 } from "lucide-react";
+import { NavBar } from "@/components/layout/navbar";
 
 const heroImage =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDuteX-lXFPJnFu556Os3BatGQQHpBErak1KYwdDhFRc_xYE-wa-ASSxmoRgwnjo7NYrM4isBrjUtQwacOpg0ynHPXxzs4VThBXRdzOixmwcHhwOinzKieSVG_8tMgiQsFsyIM1GBtMVQfoba25mbJzvmPAUymJ_fJyIKeDrhAKGLMDbLlkfxeFqW5Z4bzBhdZdVtsUYGVPo5DiozrorZPgwOBQJmUVnRIcsMuCM5LSqmdRT0VQpcyni78d6KW6EmIABKRgxz6GJKI";
@@ -25,70 +23,9 @@ const serviceImage =
 export default function HomePage() {
   return (
     <main className="flex-1 bg-[#f8f9fa] font-home-body text-[#191c1d] pt-16">
-      <header className="fixed top-0 z-50 w-full border-b border-neutral-200/50 bg-[#f8f9fa] transition-all duration-300 ease-in-out">
-        <div className="flex h-16 w-full max-w-full items-center justify-between px-4 py-4 sm:px-8">
-          <div className="flex items-center gap-4">
-            <span className="font-home-display text-xl font-bold tracking-tight text-[#00682f]">
-              Academic Intelligence Portal
-            </span>
-          </div>
+      <NavBar activePage="home" />
 
-          <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
-            <Link
-              href="/"
-              className="font-home-display border-b-2 border-[#00682f] pb-1 text-[#00682f]"
-            >
-              Home
-            </Link>
-
-            <div className="group relative">
-              <button
-                type="button"
-                className="font-home-display flex items-center gap-1 pb-1 text-gray-600 transition-colors hover:text-[#00682f]"
-              >
-                Servicios
-                <ChevronDown className="size-4" />
-              </button>
-
-              <div className="invisible absolute left-0 top-full z-50 w-48 pt-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                <div className="overflow-hidden rounded-[0.5rem] border border-neutral-200/50 bg-white shadow-xl">
-                  <Link
-                    href="/automatizar-reportes"
-                    className="block px-4 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
-                  >
-                    Automatizar Reportes para Boletín
-                  </Link>
-                  <Link
-                    href="/pronostico-estudiantil"
-                    className="block px-4 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
-                  >
-                    Pronóstico de Población Estudiantil
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              aria-label="Notificaciones"
-              className="rounded-md p-2 text-neutral-500 transition-all duration-150 ease-in-out hover:bg-gray-100 active:scale-95"
-            >
-              <Bell className="size-5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Configuración"
-              className="rounded-md p-2 text-neutral-500 transition-all duration-150 ease-in-out hover:bg-gray-100 active:scale-95"
-            >
-              <Settings className="size-5" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <section className="relative flex min-h-[500px] items-center overflow-hidden bg-[#f8f9fa] px-8 md:px-24">
+      <section className="relative flex min-h-95 items-center overflow-hidden bg-[#f8f9fa] px-6 py-12 sm:min-h-125 sm:px-8 sm:py-0 md:px-24">
         <div className="absolute right-0 top-0 hidden h-full w-1/2 opacity-10 lg:block">
           <img
             src={heroImage}
@@ -105,7 +42,7 @@ export default function HomePage() {
             </span>
           </div>
 
-          <h1 className="font-home-display mb-6 text-5xl font-extrabold leading-tight tracking-[-0.05em] text-[#191c1d] md:text-7xl">
+          <h1 className="font-home-display mb-6 text-4xl font-extrabold leading-tight tracking-[-0.05em] text-[#191c1d] sm:text-5xl md:text-7xl">
             Universidad de <br />
             <span className="text-[#00682f]">Cundinamarca</span>
           </h1>
@@ -132,7 +69,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="bg-[#f3f4f5] px-8 py-24 md:px-24">
+      <section className="bg-[#f3f4f5] px-4 py-12 sm:px-8 sm:py-16 md:px-24 md:py-24">
         <div className="mx-auto max-w-7xl">
           <div className="mb-16 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -148,8 +85,8 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-            <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-8 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 md:col-span-2 md:flex-row">
-              <div className="aspect-square w-full overflow-hidden rounded-[0.5rem] md:w-1/3">
+            <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
+              <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:h-auto sm:aspect-square md:w-1/3">
                 <img
                   src={serviceImage}
                   alt="Visualización de datos académicos en una pantalla digital."
@@ -192,8 +129,8 @@ export default function HomePage() {
               </div>
             </article>
 
-            <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-8 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 md:col-span-2 md:flex-row">
-              <div className="aspect-square w-full overflow-hidden rounded-[0.5rem] md:w-1/3">
+            <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
+              <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:h-auto sm:aspect-square md:w-1/3">
                 <img
                   src={serviceImage}
                   alt="Gráfico de tendencias con proyecciones de población estudiantil."

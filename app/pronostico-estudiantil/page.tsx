@@ -1,15 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import {
-  Bell,
-  ChevronDown,
-  Download,
-  GraduationCap,
-  Settings,
-  TrendingUp,
-} from "lucide-react";
+import { Download, GraduationCap, TrendingUp } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -20,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { NavBar } from "@/components/layout/navbar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,7 +47,7 @@ type ApiResponse = {
   error?: string;
 };
 
-// ─── Tooltip personalizado ────────────────────────────────────────────────────
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
 
 function CustomTooltip({
   active,
@@ -68,16 +61,14 @@ function CustomTooltip({
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
-    <div className="rounded-lg border border-[#bdcabb]/30 bg-white px-4 py-3 shadow-xl">
+    <div className="rounded-lg border border-[#bdcabb]/30 bg-white px-3 py-2 shadow-xl sm:px-4 sm:py-3">
       <p className="mb-1 font-home-display text-xs font-bold uppercase tracking-widest text-[#6e7a6e]">
         {label}
         {point.tipo === "pronostico" && (
-          <span className="ml-2 rounded-full bg-[#adc6ff]/30 px-2 py-0.5 text-[#0058be]">
-            Pronóstico
-          </span>
+          <span className="ml-2 rounded-full bg-[#adc6ff]/30 px-2 py-0.5 text-[#0058be]">P</span>
         )}
       </p>
-      <p className="font-home-display text-xl font-extrabold text-[#191c1d]">
+      <p className="font-home-display text-lg font-extrabold text-[#191c1d] sm:text-xl">
         {payload[0].value.toLocaleString("es-CO")}
       </p>
     </div>
@@ -99,6 +90,14 @@ export default function PronosticoEstudiantilPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<"pregrado" | "posgrado" | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const fetchData = useCallback(async (cat: string) => {
     setLoading(true);
@@ -116,10 +115,6 @@ export default function PronosticoEstudiantilPage() {
   useEffect(() => {
     void fetchData(categoriaActiva);
   }, [categoriaActiva, fetchData]);
-
-  const handleCategoriaChange = (cat: string) => {
-    setCategoriaActiva(cat);
-  };
 
   const handleDownload = async (nivel: "pregrado" | "posgrado") => {
     setDownloading(nivel);
@@ -140,13 +135,11 @@ export default function PronosticoEstudiantilPage() {
     }
   };
 
-  // Datos para el gráfico: histórico + pronóstico en la misma línea
   const chartData =
     data?.chartData.map((d) => ({
       label: d.label,
       historico: d.tipo === "historico" ? d.total : undefined,
       pronostico: d.tipo === "pronostico" ? d.total : undefined,
-      // Punto de conexión entre las dos líneas
       connection:
         d.tipo === "pronostico" ||
         (data.chartData[data.chartData.indexOf(d) + 1]?.tipo === "pronostico" &&
@@ -155,91 +148,27 @@ export default function PronosticoEstudiantilPage() {
           : undefined,
     })) ?? [];
 
-  // Primera etiqueta de pronóstico para la línea de referencia
   const firstForecastLabel = data?.chartData.find((d) => d.tipo === "pronostico")?.label;
-
   const categoriasDisponibles = data?.categorias ?? ["Matriculados", "Inscritos", "Primiparos", "Admitidos"];
   const summary = data?.summary;
 
   return (
     <main className="min-h-screen flex-1 bg-[#f8f9fa] pt-16 font-home-body text-[#191c1d]">
-      {/* ── Navbar ─────────────────────────────────────────────────────────── */}
-      <header className="fixed top-0 z-50 w-full border-b border-neutral-200/50 bg-[#f8f9fa] transition-all duration-300 ease-in-out">
-        <div className="flex h-16 w-full max-w-full items-center justify-between px-4 py-4 sm:px-8">
-          <div className="flex items-center gap-4">
-            <span className="font-home-display text-xl font-bold tracking-tight text-[#00682f]">
-              Academic Intelligence Portal
-            </span>
-          </div>
+      <NavBar activePage="pronostico-estudiantil" />
 
-          <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
-            <Link
-              href="/"
-              className="font-home-display pb-1 text-gray-600 transition-colors hover:text-[#00682f]"
-            >
-              Home
-            </Link>
-
-            <div className="group relative">
-              <button
-                type="button"
-                className="font-home-display flex items-center gap-1 border-b-2 border-[#00682f] pb-1 font-bold text-[#00682f]"
-              >
-                Servicios
-                <ChevronDown className="size-4" />
-              </button>
-
-              <div className="invisible absolute left-0 top-full z-50 w-64 pt-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                <div className="overflow-hidden rounded-[0.5rem] border border-neutral-200/50 bg-white shadow-xl">
-                  <Link
-                    href="/automatizar-reportes"
-                    className="block px-4 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
-                  >
-                    Automatizar Reportes para Boletín
-                  </Link>
-                  <Link
-                    href="/pronostico-estudiantil"
-                    className="block bg-[#00682f]/5 px-4 py-3 text-sm font-semibold text-[#00682f] transition-colors hover:bg-[#00682f]/10"
-                  >
-                    Pronóstico de Población Estudiantil
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              aria-label="Notificaciones"
-              className="rounded-md p-2 text-neutral-500 transition-all duration-150 ease-in-out hover:bg-gray-100 active:scale-95"
-            >
-              <Bell className="size-5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Configuración"
-              className="rounded-md p-2 text-neutral-500 transition-all duration-150 ease-in-out hover:bg-gray-100 active:scale-95"
-            >
-              <Settings className="size-5" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <header className="relative overflow-hidden bg-[#f3f4f5] px-8 pb-24 pt-16">
-        <div className="mx-auto max-w-7xl relative z-10">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
+      {/* ── Hero ─────────────────────────────────────────────────────────────── */}
+      <header className="relative overflow-hidden bg-[#f3f4f5] px-4 pb-16 pt-10 sm:px-8 sm:pb-24 sm:pt-16">
+        <div className="relative z-10 mx-auto max-w-7xl">
+          <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
             <div>
-              <span className="mb-4 block font-home-label text-xs font-semibold uppercase tracking-[0.2em] text-[#00682f]">
+              <span className="mb-3 block font-home-label text-xs font-semibold uppercase tracking-[0.2em] text-[#00682f] sm:mb-4">
                 Módulo de Analítica Avanzada
               </span>
-              <h1 className="font-home-display mb-6 text-5xl font-extrabold leading-tight tracking-tighter text-[#191c1d] md:text-6xl">
+              <h1 className="font-home-display mb-4 text-4xl font-extrabold leading-tight tracking-tighter text-[#191c1d] sm:mb-6 sm:text-5xl md:text-6xl">
                 Pronóstico de{" "}
                 <span className="text-[#00682f]">Población Estudiantil</span>
               </h1>
-              <p className="max-w-xl font-home-body text-lg leading-relaxed text-[#3e4a3e]">
+              <p className="max-w-xl font-home-body text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
                 Visualice las tendencias futuras del ecosistema académico.
                 Nuestra herramienta utiliza modelos de media ponderada para
                 anticipar el comportamiento de la matrícula, inscritos y
@@ -247,13 +176,13 @@ export default function PronosticoEstudiantilPage() {
               </p>
             </div>
 
-            {/* Tarjeta de cobertura del pronóstico */}
-            <div className="relative hidden lg:block">
-              <div className="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-[#00682f]/5 blur-3xl" />
-              <div className="relative rounded-xl border border-[#bdcabb]/30 bg-white p-8 shadow-[0_20px_40px_rgba(0,104,47,0.06)]">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#00682f]">
-                    <TrendingUp className="size-6 text-white" />
+            {/* Tarjeta cobertura — desktop: columna derecha / mobile+tablet: debajo del texto */}
+            <div className="relative">
+              <div className="absolute -right-12 -top-12 hidden h-64 w-64 rounded-full bg-[#00682f]/5 blur-3xl lg:block" />
+              <div className="relative rounded-xl border border-[#bdcabb]/30 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] sm:p-8">
+                <div className="mb-4 flex items-center gap-4 sm:mb-6">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#00682f] sm:h-12 sm:w-12">
+                    <TrendingUp className="size-5 text-white sm:size-6" />
                   </div>
                   <div>
                     <h3 className="font-home-display font-bold text-[#191c1d]">
@@ -275,46 +204,37 @@ export default function PronosticoEstudiantilPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Total */}
-                    <div className="flex items-center justify-between rounded-lg bg-[#00682f]/5 px-4 py-3">
-                      <span className="font-home-label text-xs font-semibold uppercase tracking-wider text-[#3e4a3e]">
-                        Total programas
+                  <div className="grid grid-cols-3 gap-3 sm:block sm:space-y-3">
+                    <div className="flex flex-col items-center justify-center rounded-lg bg-[#00682f]/5 px-3 py-3 sm:flex-row sm:justify-between sm:px-4">
+                      <span className="font-home-label text-[10px] font-semibold uppercase tracking-wider text-[#3e4a3e]">
+                        Total
                       </span>
-                      <span className="font-home-display text-2xl font-extrabold text-[#00682f]">
+                      <span className="font-home-display text-xl font-extrabold text-[#00682f] sm:text-2xl">
                         {data?.cobertura?.totalProgramas ?? "—"}
                       </span>
                     </div>
-
-                    {/* Pregrado */}
-                    <div className="flex items-center justify-between rounded-lg bg-[#edeeef] px-4 py-3">
-                      <div>
-                        <p className="font-home-label text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">
-                          Pregrado
-                        </p>
-                        <p className="font-home-label text-xs text-[#6e7a6e]">
-                          {data?.cobertura?.pregrado.unidadesRegionales ?? "—"} unidades regionales
+                    <div className="flex flex-col items-center justify-between rounded-lg bg-[#edeeef] px-3 py-3 sm:flex-row sm:px-4">
+                      <div className="text-center sm:text-left">
+                        <p className="font-home-label text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Pregrado</p>
+                        <p className="hidden font-home-label text-xs text-[#6e7a6e] sm:block">
+                          {data?.cobertura?.pregrado.unidadesRegionales ?? "—"} u.r.
                         </p>
                       </div>
                       <span className="font-home-display text-xl font-extrabold text-[#191c1d]">
                         {data?.cobertura?.pregrado.programas ?? "—"}
-                        <span className="ml-1 font-home-label text-xs font-normal text-[#6e7a6e]">prog.</span>
+                        <span className="font-home-label text-xs font-normal text-[#6e7a6e]"> prog.</span>
                       </span>
                     </div>
-
-                    {/* Posgrado */}
-                    <div className="flex items-center justify-between rounded-lg bg-[#edeeef] px-4 py-3">
-                      <div>
-                        <p className="font-home-label text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">
-                          Posgrado
-                        </p>
-                        <p className="font-home-label text-xs text-[#6e7a6e]">
-                          {data?.cobertura?.posgrado.unidadesRegionales ?? "—"} unidades regionales
+                    <div className="flex flex-col items-center justify-between rounded-lg bg-[#edeeef] px-3 py-3 sm:flex-row sm:px-4">
+                      <div className="text-center sm:text-left">
+                        <p className="font-home-label text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Posgrado</p>
+                        <p className="hidden font-home-label text-xs text-[#6e7a6e] sm:block">
+                          {data?.cobertura?.posgrado.unidadesRegionales ?? "—"} u.r.
                         </p>
                       </div>
                       <span className="font-home-display text-xl font-extrabold text-[#191c1d]">
                         {data?.cobertura?.posgrado.programas ?? "—"}
-                        <span className="ml-1 font-home-label text-xs font-normal text-[#6e7a6e]">prog.</span>
+                        <span className="font-home-label text-xs font-normal text-[#6e7a6e]"> prog.</span>
                       </span>
                     </div>
                   </div>
@@ -326,37 +246,59 @@ export default function PronosticoEstudiantilPage() {
         <div className="absolute bottom-0 right-0 h-full w-1/3 bg-gradient-to-l from-[#00682f]/5 to-transparent pointer-events-none" />
       </header>
 
-      {/* ── Panel principal ─────────────────────────────────────────────────── */}
-      <section className="relative z-20 -mt-12 mb-20 max-w-7xl mx-auto px-8">
-        <div className="rounded-xl border border-[#bdcabb]/20 bg-white p-8 shadow-xl">
+      {/* ── Panel principal ───────────────────────────────────────────────────── */}
+      <section className="relative z-20 mx-auto mb-12 max-w-7xl px-4 sm:-mt-12 sm:mb-20 sm:px-8">
+        <div className="rounded-xl border border-[#bdcabb]/20 bg-white p-4 shadow-xl sm:p-8">
 
           {/* Filtros */}
-          <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-wrap gap-2 rounded-full bg-[#edeeef] p-1.5">
-              {(categoriasDisponibles.length > 0
-                ? categoriasDisponibles
-                : Object.keys(CATEGORIAS_LABELS)
-              ).map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => handleCategoriaChange(cat)}
-                  className={`rounded-full px-5 py-2 text-sm font-semibold transition-all duration-200 ${
-                    categoriaActiva === cat
-                      ? "bg-[#00682f] text-white shadow-md"
-                      : "text-[#3e4a3e] hover:bg-[#e7e8e9]"
-                  }`}
-                >
-                  {CATEGORIAS_LABELS[cat] ?? cat}
-                </button>
-              ))}
+          <div className="mb-6 flex flex-col gap-3 sm:mb-10 sm:gap-6 md:flex-row md:items-center md:justify-between">
+
+            {/* Mobile: select desplegable */}
+            <div className="sm:hidden">
+              <select
+                value={categoriaActiva}
+                onChange={(e) => setCategoriaActiva(e.target.value)}
+                className="w-full rounded-xl border border-[#bdcabb]/50 bg-white px-4 py-2.5 text-sm font-semibold text-[#191c1d] shadow-sm focus:border-[#00682f] focus:outline-none focus:ring-2 focus:ring-[#00682f]/20"
+              >
+                {(categoriasDisponibles.length > 0
+                  ? categoriasDisponibles
+                  : Object.keys(CATEGORIAS_LABELS)
+                ).map((cat) => (
+                  <option key={cat} value={cat}>
+                    {CATEGORIAS_LABELS[cat] ?? cat}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Desktop: pill buttons */}
+            <div className="hidden sm:flex sm:flex-wrap sm:gap-2">
+              <div className="flex flex-wrap gap-1.5 rounded-full bg-[#edeeef] p-1.5 sm:gap-2">
+                {(categoriasDisponibles.length > 0
+                  ? categoriasDisponibles
+                  : Object.keys(CATEGORIAS_LABELS)
+                ).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategoriaActiva(cat)}
+                    className={`rounded-full px-5 py-2 text-sm font-semibold transition-all duration-200 ${
+                      categoriaActiva === cat
+                        ? "bg-[#00682f] text-white shadow-md"
+                        : "text-[#3e4a3e] hover:bg-[#e7e8e9]"
+                    }`}
+                  >
+                    {CATEGORIAS_LABELS[cat] ?? cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
               <span className="font-home-label text-[10px] font-bold uppercase tracking-widest text-[#6e7a6e]">
                 Horizonte
               </span>
-              <span className="rounded-lg bg-[#edeeef] px-4 py-2 text-sm font-medium text-[#191c1d]">
+              <span className="rounded-lg bg-[#edeeef] px-3 py-1.5 text-xs font-medium text-[#191c1d] sm:px-4 sm:py-2 sm:text-sm">
                 {data?.forecastPeriods && data.forecastPeriods.length > 0
                   ? `Hasta ${data.forecastPeriods[data.forecastPeriods.length - 1][0]}`
                   : "Calculando..."}
@@ -364,8 +306,22 @@ export default function PronosticoEstudiantilPage() {
             </div>
           </div>
 
+          {/* Leyenda fuera del gráfico (siempre visible, sin overflow) */}
+          {!loading && chartData.length > 0 && (
+            <div className="mb-3 flex gap-4 sm:mb-4">
+              <div className="flex items-center gap-2">
+                <span className="h-0.5 w-5 rounded bg-[#00682f]" />
+                <span className="font-home-label text-xs font-semibold text-[#191c1d]">Histórico</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="block h-0.5 w-5 border-t-2 border-dashed border-[#0058be]" />
+                <span className="font-home-label text-xs font-semibold text-[#191c1d]">Proyección</span>
+              </div>
+            </div>
+          )}
+
           {/* Gráfico */}
-          <div className="relative mb-8 h-[420px] w-full">
+          <div className="relative mb-6 h-64 w-full sm:mb-8 sm:h-80 md:h-96 lg:h-[420px]">
             {loading ? (
               <div className="flex h-full items-center justify-center">
                 <div className="flex flex-col items-center gap-3 text-[#6e7a6e]">
@@ -375,139 +331,120 @@ export default function PronosticoEstudiantilPage() {
               </div>
             ) : data?.error ? (
               <div className="flex h-full items-center justify-center text-red-500">
-                <p>{data.error}</p>
+                <p className="text-sm">{data.error}</p>
               </div>
             ) : chartData.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-4 text-[#6e7a6e]">
-                <TrendingUp className="size-12 opacity-30" />
-                <p className="font-home-label text-sm">
+                <TrendingUp className="size-10 opacity-30 sm:size-12" />
+                <p className="px-4 text-center font-home-label text-sm">
                   No hay datos disponibles. Cargue datos en el módulo de Automatizar Reportes.
                 </p>
               </div>
             ) : (
-              <>
-                {/* Leyenda */}
-                <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
-                  <div className="flex items-center gap-3 rounded-lg border border-[#bdcabb]/30 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm">
-                    <span className="h-0.5 w-6 rounded bg-[#00682f]" />
-                    <span className="font-home-label text-xs font-semibold text-[#191c1d]">
-                      Datos Históricos
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 rounded-lg border border-[#bdcabb]/30 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm">
-                    <span className="h-0.5 w-6 rounded border-t-2 border-dashed border-[#0058be]" />
-                    <span className="font-home-label text-xs font-semibold text-[#191c1d]">
-                      Proyección
-                    </span>
-                  </div>
-                </div>
-
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={chartData}
-                    margin={{ top: 20, right: 160, left: 10, bottom: 20 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#bdcabb"
-                      strokeOpacity={0.3}
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 10, fill: "#6e7a6e", fontFamily: "Work Sans" }}
-                      tickLine={false}
-                      axisLine={{ stroke: "#bdcabb", strokeOpacity: 0.5 }}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: "#6e7a6e", fontFamily: "Work Sans" }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v: number) => v.toLocaleString("es-CO")}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    {firstForecastLabel && (
-                      <ReferenceLine
-                        x={firstForecastLabel}
-                        stroke="#0058be"
-                        strokeDasharray="4 4"
-                        strokeOpacity={0.5}
-                        label={{
-                          value: "Pronóstico",
-                          fill: "#0058be",
-                          fontSize: 10,
-                          fontFamily: "Work Sans",
-                        }}
-                      />
-                    )}
-                    {/* Línea histórica */}
-                    <Line
-                      type="monotone"
-                      dataKey="historico"
-                      stroke="#00682f"
-                      strokeWidth={3}
-                      dot={{ fill: "#00682f", r: 3, strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "#00682f" }}
-                      connectNulls={false}
-                      name="Histórico"
-                    />
-                    {/* Línea de conexión (último histórico + primeros pronósticos) */}
-                    <Line
-                      type="monotone"
-                      dataKey="connection"
-                      stroke="#00682f"
-                      strokeWidth={2}
-                      strokeDasharray="0"
-                      dot={false}
-                      connectNulls
-                      name="Conexión"
-                      legendType="none"
-                    />
-                    {/* Línea de pronóstico */}
-                    <Line
-                      type="monotone"
-                      dataKey="pronostico"
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 10,
+                    right: isMobile ? 8 : 20,
+                    left: isMobile ? -10 : 10,
+                    bottom: isMobile ? 4 : 8,
+                  }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#bdcabb"
+                    strokeOpacity={0.3}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    hide={isMobile}
+                    tick={{ fontSize: 11, fill: "#6e7a6e", fontFamily: "Work Sans" }}
+                    tickLine={false}
+                    axisLine={{ stroke: "#bdcabb", strokeOpacity: 0.5 }}
+                    interval={1}
+                    tickFormatter={(val: string) => {
+                      const parts = val.split("-");
+                      return parts[1] === "IPA" ? parts[0] : "";
+                    }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: isMobile ? 8 : 10, fill: "#6e7a6e", fontFamily: "Work Sans" }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v: number) =>
+                      isMobile ? `${Math.round(v / 1000)}k` : v.toLocaleString("es-CO")
+                    }
+                    width={isMobile ? 32 : 60}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  {firstForecastLabel && (
+                    <ReferenceLine
+                      x={firstForecastLabel}
                       stroke="#0058be"
-                      strokeWidth={2.5}
-                      strokeDasharray="8 5"
-                      dot={{ fill: "#0058be", r: 3, strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "#0058be" }}
-                      connectNulls={false}
-                      name="Pronóstico"
+                      strokeDasharray="4 4"
+                      strokeOpacity={0.5}
+                      label={
+                        isMobile
+                          ? undefined
+                          : { value: "Pronóstico", fill: "#0058be", fontSize: 10, fontFamily: "Work Sans" }
+                      }
                     />
-                  </LineChart>
-                </ResponsiveContainer>
-              </>
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey="historico"
+                    stroke="#00682f"
+                    strokeWidth={isMobile ? 2 : 3}
+                    dot={{ fill: "#00682f", r: isMobile ? 2 : 3, strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#00682f" }}
+                    connectNulls={false}
+                    name="Histórico"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="connection"
+                    stroke="#00682f"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                    name="Conexión"
+                    legendType="none"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="pronostico"
+                    stroke="#0058be"
+                    strokeWidth={isMobile ? 2 : 2.5}
+                    strokeDasharray="8 5"
+                    dot={{ fill: "#0058be", r: isMobile ? 2 : 3, strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#0058be" }}
+                    connectNulls={false}
+                    name="Pronóstico"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             )}
           </div>
 
           {/* Estadísticas resumen */}
-          <div className="grid grid-cols-3 gap-6 border-t border-[#bdcabb]/20 pt-8">
+          <div className="grid grid-cols-1 gap-4 border-t border-[#bdcabb]/20 pt-6 sm:grid-cols-3 sm:gap-6 sm:pt-8">
             <div className="flex flex-col gap-1">
               <span className="font-home-label text-[10px] font-bold uppercase tracking-widest text-[#6e7a6e]">
                 Variación Estimada
               </span>
               <div className="flex items-baseline gap-2">
-                <span
-                  className={`font-home-display text-3xl font-extrabold ${
-                    (summary?.growthPct ?? 0) >= 0 ? "text-[#00682f]" : "text-red-600"
-                  }`}
-                >
-                  {loading
-                    ? "—"
-                    : summary?.growthPct != null
+                <span className={`font-home-display text-3xl font-extrabold ${
+                  (summary?.growthPct ?? 0) >= 0 ? "text-[#00682f]" : "text-red-600"
+                }`}>
+                  {loading ? "—" : summary?.growthPct != null
                     ? `${summary.growthPct >= 0 ? "+" : ""}${summary.growthPct}%`
                     : "—"}
                 </span>
-                <TrendingUp
-                  className={`size-4 ${
-                    (summary?.growthPct ?? 0) >= 0 ? "text-[#00682f]" : "text-red-600"
-                  }`}
-                />
+                <TrendingUp className={`size-4 ${(summary?.growthPct ?? 0) >= 0 ? "text-[#00682f]" : "text-red-600"}`} />
               </div>
-              <span className="font-home-label text-xs text-[#6e7a6e]">
-                respecto al último periodo
-              </span>
+              <span className="font-home-label text-xs text-[#6e7a6e]">respecto al último periodo</span>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -516,9 +453,7 @@ export default function PronosticoEstudiantilPage() {
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-home-display text-3xl font-extrabold text-[#191c1d]">
-                  {loading
-                    ? "—"
-                    : summary?.firstForecastTotal != null
+                  {loading ? "—" : summary?.firstForecastTotal != null
                     ? summary.firstForecastTotal.toLocaleString("es-CO")
                     : "—"}
                 </span>
@@ -531,9 +466,7 @@ export default function PronosticoEstudiantilPage() {
                 Confianza Estadística
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="font-home-display text-3xl font-extrabold text-[#0058be]">
-                  Alta
-                </span>
+                <span className="font-home-display text-3xl font-extrabold text-[#0058be]">Alta</span>
                 <span className="text-xs font-medium text-[#6e7a6e]">(P &lt; 0.05)</span>
               </div>
             </div>
@@ -541,123 +474,74 @@ export default function PronosticoEstudiantilPage() {
         </div>
       </section>
 
-      {/* ── Sección de descarga ─────────────────────────────────────────────── */}
-      <section className="mx-auto mb-32 max-w-7xl px-8">
-        <div className="mb-10 text-center">
-          <h2 className="font-home-display mb-2 text-3xl font-extrabold tracking-tight text-[#191c1d]">
+      {/* ── Descarga ─────────────────────────────────────────────────────────── */}
+      <section className="mx-auto mb-20 max-w-7xl px-4 sm:mb-32 sm:px-8">
+        <div className="mb-8 text-center sm:mb-10">
+          <h2 className="font-home-display mb-2 text-2xl font-extrabold tracking-tight text-[#191c1d] sm:text-3xl">
             Recursos y Documentación
           </h2>
-          <p className="font-home-body text-[#3e4a3e]">
-            Exporte los análisis detallados para integración en informes
-            institucionales.
+          <p className="font-home-body text-sm text-[#3e4a3e] sm:text-base">
+            Exporte los análisis detallados para integración en informes institucionales.
           </p>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2">
-          {/* Card Pregrado */}
-          <div className="group relative rounded-xl border border-transparent bg-[#f3f4f5] p-8 transition-all duration-300 hover:border-[#00682f]/20 hover:bg-white/60">
-            <div className="mb-8 flex items-start justify-between">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white shadow-sm transition-transform duration-300 group-hover:scale-110">
-                <GraduationCap className="size-7 text-[#00682f]" />
-              </div>
-              <div className="flex gap-2">
+        <div className="grid gap-6 sm:gap-8 md:grid-cols-2">
+          {(["pregrado", "posgrado"] as const).map((nivel) => (
+            <div
+              key={nivel}
+              className="group relative rounded-xl border border-transparent bg-[#f3f4f5] p-6 transition-all duration-300 hover:border-[#00682f]/20 hover:bg-white/60 sm:p-8"
+            >
+              <div className="mb-6 flex items-start justify-between sm:mb-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm transition-transform duration-300 group-hover:scale-110 sm:h-14 sm:w-14">
+                  <GraduationCap className="size-6 text-[#00682f] sm:size-7" />
+                </div>
                 <span className="rounded-full bg-[#e7e8e9] px-3 py-1 font-home-label text-[10px] font-bold uppercase">
                   XLSX
                 </span>
               </div>
+
+              <h3 className="font-home-display mb-2 text-lg font-bold text-[#191c1d] sm:mb-3 sm:text-xl">
+                Descargar Pronóstico {nivel === "pregrado" ? "Pregrado" : "Posgrado"}
+              </h3>
+              <p className="mb-6 text-sm leading-relaxed text-[#3e4a3e] sm:mb-8">
+                {nivel === "pregrado"
+                  ? "Desglose por facultades, sedes y programas académicos de pregrado. Hojas separadas por categoría con columnas históricas y de pronóstico."
+                  : "Análisis de especializaciones, maestrías y doctorados. Proyecciones de inscripción por modalidad con datos históricos completos."}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => void handleDownload(nivel)}
+                disabled={downloading !== null || loading}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#00682f] to-[#00843d] py-3 font-home-display font-bold text-white shadow-lg shadow-[#00682f]/10 transition-all hover:shadow-[#00682f]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:py-4"
+              >
+                {downloading === nivel ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    Descargar Reporte Completo
+                    <Download className="size-4" />
+                  </>
+                )}
+              </button>
             </div>
-
-            <h3 className="font-home-display mb-3 text-xl font-bold text-[#191c1d]">
-              Descargar Pronóstico Pregrado
-            </h3>
-            <p className="mb-8 text-sm leading-relaxed text-[#3e4a3e]">
-              Desglose por facultades, sedes y programas académicos para el
-              nivel de pregrado. Hojas separadas por categoría (Inscritos,
-              Admitidos, Matriculados, Primíparos) con columnas históricas y de
-              pronóstico marcadas.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => void handleDownload("pregrado")}
-              disabled={downloading !== null || loading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#00682f] to-[#00843d] py-4 font-home-display font-bold text-white shadow-lg shadow-[#00682f]/10 transition-all hover:shadow-[#00682f]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {downloading === "pregrado" ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Generando...
-                </>
-              ) : (
-                <>
-                  Descargar Reporte Completo
-                  <Download className="size-4" />
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Card Posgrado */}
-          <div className="group relative rounded-xl border border-transparent bg-[#f3f4f5] p-8 transition-all duration-300 hover:border-[#00682f]/20 hover:bg-white/60">
-            <div className="mb-8 flex items-start justify-between">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white shadow-sm transition-transform duration-300 group-hover:scale-110">
-                <GraduationCap className="size-7 text-[#00682f]" />
-              </div>
-              <div className="flex gap-2">
-                <span className="rounded-full bg-[#e7e8e9] px-3 py-1 font-home-label text-[10px] font-bold uppercase">
-                  XLSX
-                </span>
-              </div>
-            </div>
-
-            <h3 className="font-home-display mb-3 text-xl font-bold text-[#191c1d]">
-              Descargar Pronóstico Posgrado
-            </h3>
-            <p className="mb-8 text-sm leading-relaxed text-[#3e4a3e]">
-              Análisis de especializaciones, maestrías y doctorados. Tendencias
-              de demanda y proyecciones de inscripción por modalidad, con
-              indicadores históricos desde el primer año disponible en la base
-              de datos.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => void handleDownload("posgrado")}
-              disabled={downloading !== null || loading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#00682f] to-[#00843d] py-4 font-home-display font-bold text-white shadow-lg shadow-[#00682f]/10 transition-all hover:shadow-[#00682f]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {downloading === "posgrado" ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Generando...
-                </>
-              ) : (
-                <>
-                  Descargar Reporte Completo
-                  <Download className="size-4" />
-                </>
-              )}
-            </button>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="mt-auto w-full border-t border-slate-200 bg-slate-50 px-8 py-12">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 md:flex-row">
+      {/* ── Footer ───────────────────────────────────────────────────────────── */}
+      <footer className="mt-auto w-full border-t border-slate-200 bg-slate-50 px-4 py-8 sm:px-8 sm:py-12">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
           <p className="text-sm text-[#3e4a3e]">
             © Universidad de Cundinamarca - Academic Intelligence Portal
           </p>
-          <div className="flex gap-8">
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">
-              Privacy Policy
-            </a>
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">
-              Institutional Data
-            </a>
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">
-              Contact Support
-            </a>
+          <div className="flex flex-wrap justify-center gap-6 md:justify-end">
+            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Privacy Policy</a>
+            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Institutional Data</a>
+            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Contact Support</a>
           </div>
         </div>
       </footer>
