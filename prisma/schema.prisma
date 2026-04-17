@@ -22,3 +22,49 @@ model Estudiante {
   @@unique([categoria, unidad_regional, nivel, nivel_academico, programa_academico, anio, periodo])
   @@map("estudiantes")
 }
+
+model PlanMejoramientoEstudiante {
+  id                       Int      @id @default(autoincrement())
+  categoria                String
+  subcategoria             String
+  plan_de_mejoramiento     String
+  actividad                String
+  fecha_cumplimiento       String?
+  evidencias_cumplimiento  String?
+  calificacion_cumplimiento Float?
+  efectividad              String?
+  programa                 String
+  unidad_regional          String
+  facultad                 String
+  anio                     Int      @map("año")
+  encuentro                String
+  formulado                String?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  @@unique([encuentro, anio, programa, unidad_regional, facultad, actividad])
+  @@map("planes_mejoramiento_estudiantes")
+}
+
+model PlanMejoramientoDocente {
+  id                       Int      @id @default(autoincrement())
+  categoria                String
+  subcategoria             String
+  plan_de_mejoramiento     String
+  actividad                String
+  fecha_cumplimiento       String?
+  evidencias_cumplimiento  String?
+  calificacion_cumplimiento Float?
+  programa                 String
+  unidad_regional          String
+  facultad                 String
+  anio                     Int      @map("año")
+  encuentro                String
+  formulado                String?
+  calificacion             String?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  @@unique([encuentro, anio, programa, unidad_regional, facultad, actividad])
+  @@map("planes_mejoramiento_docentes")
+}

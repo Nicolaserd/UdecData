@@ -5,12 +5,13 @@ import { useState } from "react";
 import { Bell, ChevronDown, Menu, Settings, X } from "lucide-react";
 
 interface NavBarProps {
-  activePage?: "home" | "automatizar-reportes" | "pronostico-estudiantil";
+  activePage?: "home" | "automatizar-reportes" | "pronostico-estudiantil" | "encuentros-dialogicos";
 }
 
 const SERVICES = [
   { href: "/automatizar-reportes", label: "Automatizar Reportes para Boletín" },
   { href: "/pronostico-estudiantil", label: "Pronóstico de Población Estudiantil" },
+  { href: "/encuentros-dialogicos", label: "Encuentros Dialógicos" },
 ];
 
 export function NavBar({ activePage }: NavBarProps) {
@@ -18,7 +19,9 @@ export function NavBar({ activePage }: NavBarProps) {
   const [servicesOpen, setServicesOpen] = useState(false);
 
   const isService =
-    activePage === "automatizar-reportes" || activePage === "pronostico-estudiantil";
+    activePage === "automatizar-reportes" ||
+    activePage === "pronostico-estudiantil" ||
+    activePage === "encuentros-dialogicos";
 
   return (
     <header className="fixed top-0 z-50 w-full border-b border-neutral-200/50 bg-[#f8f9fa]">

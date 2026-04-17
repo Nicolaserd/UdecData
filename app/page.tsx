@@ -10,6 +10,7 @@ import {
   PlusCircle,
   Sparkles,
   TrendingUp,
+  Users,
   Workflow,
 } from "lucide-react";
 import { NavBar } from "@/components/layout/navbar";
@@ -159,6 +160,50 @@ export default function HomePage() {
                 <div className="flex items-center gap-4">
                   <Link
                     href="/pronostico-estudiantil"
+                    className="font-home-display inline-flex items-center gap-2 rounded-[0.25rem] bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-6 py-3 text-sm font-bold text-white transition-all"
+                  >
+                    Ir al servicio
+                    <ExternalLink className="size-4" />
+                  </Link>
+
+                  <span className="font-home-label inline-flex items-center gap-1 text-xs text-[#6e7a6e]">
+                    <Clock3 className="size-3.5" />
+                    Actualizado hace 2h
+                  </span>
+                </div>
+              </div>
+            </article>
+
+            <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
+              <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:h-auto sm:aspect-square md:w-1/3">
+                <img
+                  src={serviceImage}
+                  alt="Encuentros dialógicos entre personas en entornos académicos."
+                  className="h-full w-full object-cover grayscale transition-all duration-500 group-hover:grayscale-0"
+                />
+              </div>
+
+              <div className="flex flex-1 flex-col">
+                <div className="mb-4 flex items-start justify-between">
+                  <Users className="size-10 text-[#00682f]" />
+                  <span className="font-home-label rounded-[0.25rem] bg-[#2170e4]/10 px-2 py-1 text-[10px] font-bold text-[#0058be]">
+                    ACTIVO
+                  </span>
+                </div>
+
+                <h3 className="font-home-display mb-3 text-2xl font-bold text-[#191c1d]">
+                  Encuentros Dialógicos
+                </h3>
+
+                <p className="mb-8 flex-grow text-[#3e4a3e]">
+                  Gestione y analice los encuentros dialógicos institucionales,
+                  facilitando el seguimiento de participantes, temáticas y
+                  compromisos derivados de los espacios de diálogo académico.
+                </p>
+
+                <div className="flex items-center gap-4">
+                  <Link
+                    href="/encuentros-dialogicos"
                     className="font-home-display inline-flex items-center gap-2 rounded-[0.25rem] bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-6 py-3 text-sm font-bold text-white transition-all"
                   >
                     Ir al servicio
