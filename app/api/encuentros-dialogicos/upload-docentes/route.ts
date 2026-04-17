@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       const rawPrograma     = String(row["programa"] ?? "").trim();
       const rawUnidad       = String(row["unidad regional"] ?? "").trim();
       const rawFacultad     = String(row["facultad"] ?? "").trim();
-      const anio            = Number(row["año"] ?? 0);
+      const anio            = Number(row["ano"] ?? 0);
       const rawEncuentro    = String(row["encuentro"] ?? "").trim();
 
       if (!rawCategoria || !rawActividad || !rawPrograma || !rawEncuentro || !anio) {
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
           evidencias_cumplimiento: evidencias,
           calificacion_cumplimiento: calificacionRaw != null && calificacionRaw !== "" ? Number(calificacionRaw) || null : null,
           formulado: normalizeFormulado(row["formulado"] != null ? String(row["formulado"]) : null),
-          calificacion: normalizeCalificacion(row["calificación"] != null ? String(row["calificación"]) : null),
+          calificacion: normalizeCalificacion(row["calificacion"] != null ? String(row["calificacion"]) : null),
         },
         create: {
           categoria,
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
           anio,
           encuentro,
           formulado: normalizeFormulado(row["formulado"] != null ? String(row["formulado"]) : null),
-          calificacion: normalizeCalificacion(row["calificación"] != null ? String(row["calificación"]) : null),
+          calificacion: normalizeCalificacion(row["calificacion"] != null ? String(row["calificacion"]) : null),
         },
       });
 

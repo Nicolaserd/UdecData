@@ -67,29 +67,87 @@ export const REQUIRED_COLS_DOCENTES = [
 ] as const;
 
 /**
- * Devuelve una copia del objeto con todas las claves en minúscula y sin espacios
- * al inicio/fin, para acceso insensible a mayúsculas.
+ * Elimina tildes/diacríticos: á→a, é→e, ñ→n, etc.
+ * Usado para comparaciones insensibles a tildes en nombres de columna.
+ */
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Normalización completa de clave: trim + minúscula + sin tildes */
+function normKey(s: string): string {
+  return stripAccents(s.trim().toLowerCase());
+}
+
+/**
+ * Devuelve una copia del objeto con todas las claves normalizadas:
+ * trim + minúscula + sin tildes. Permite acceso insensible a mayúsculas y tildes.
  */
 export function normalizeRowKeys(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) {
-    out[k.trim().toLowerCase()] = v;
+    out[normKey(k)] = v;
   }
   return out;
 }
 
 /**
+ * Busca en el objeto (con claves normalizadas) la primera clave que comience
+ * con el prefijo dado. Insensible a mayúsculas/minúsculas y tildes.
+ */
+export function getByPrefix(row: Record<string, unknown>, prefix: string): unknown {
+  const p = normKey(prefix);
+  for (const [k, v] of Object.entries(row)) {
+    if (k.startsWith(p)) return v;
+  }
+  return undefined;
+}
+
+/**
+ * Columnas de programa por facultad en los archivos de encuesta.
+ * Pre-normalizadas (sin tildes, minúsculas) para coincidir con normalizeRowKeys.
+ */
+const FACULTAD_PROGRAM_COLS = [
+  "facultad de ciencias administrativas, economicas y contables",
+  "facultad de ciencias agropecuarias",
+  "facultad de ciencias del deporte y la educacion fisica",
+  "facultad de educacion",
+  "facultad de ingenieria",
+  "facultad de ciencias de la salud",
+  "facultad de ciencias sociales, humanidades y ciencias politicas",
+  "doctorado",
+  "maestrias",
+  "especializaciones",
+  "posgrados",
+  "instituto de posgrados",
+];
+
+/**
+ * Extrae el nombre del programa de la fila de encuesta.
+ * El programa está en la columna específica de facultad (la que tiene valor no nulo).
+ * Recibe la fila ya normalizada con normalizeRowKeys.
+ */
+export function extractPrograma(row: Record<string, unknown>): string {
+  for (const col of FACULTAD_PROGRAM_COLS) {
+    const val = row[col];
+    if (val != null && String(val).trim() !== "") {
+      return toSentenceCase(String(val).trim());
+    }
+  }
+  return "";
+}
+
+/**
  * Verifica que el objeto (primera fila del Excel) tenga todas las columnas requeridas.
- * Comparación insensible a mayúsculas/minúsculas y espacios al inicio/fin.
+ * Insensible a mayúsculas/minúsculas, espacios extremos y tildes.
  * Retorna los nombres de columnas faltantes.
  */
 export function checkColumnas(
   row: Record<string, unknown>,
   required: readonly string[]
 ): string[] {
-  const normalize = (s: string) => s.trim().toLowerCase();
-  const keys = Object.keys(row).map(normalize);
-  return required.filter((col) => !keys.includes(normalize(col)));
+  const keys = Object.keys(row).map(normKey);
+  return required.filter((col) => !keys.includes(normKey(col)));
 }
 
 /**

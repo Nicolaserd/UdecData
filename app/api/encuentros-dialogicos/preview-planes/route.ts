@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       const rawFacultad  = String(row["facultad"]        ?? "").trim();
       const rawEncuentro = String(row["encuentro"]       ?? "").trim();
       const rawActividad = String(row["actividad"]       ?? "").trim();
-      const anio         = Number(row["año"] ?? 0);
+      const anio         = Number(row["ano"] ?? 0);
 
       if (!rawPrograma || !rawEncuentro || !anio || !rawActividad) {
         omitidos++;

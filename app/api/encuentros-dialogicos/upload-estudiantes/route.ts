@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       const rawPrograma     = String(row["programa"] ?? "").trim();
       const rawUnidad       = String(row["unidad regional"] ?? "").trim();
       const rawFacultad     = String(row["facultad"] ?? "").trim();
-      const anio            = Number(row["año"] ?? 0);
+      const anio            = Number(row["ano"] ?? 0);
       const rawEncuentro    = String(row["encuentro"] ?? "").trim();
 
       if (!rawCategoria || !rawActividad || !rawPrograma || !rawEncuentro || !anio) {

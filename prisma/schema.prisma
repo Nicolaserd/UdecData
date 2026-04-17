@@ -68,3 +68,44 @@ model PlanMejoramientoDocente {
   @@unique([encuentro, anio, programa, unidad_regional, facultad, actividad])
   @@map("planes_mejoramiento_docentes")
 }
+
+model EncuestaEstudiante {
+  id                      Int      @id @default(autoincrement())
+  semestre                String?
+  experiencia_general     Int?
+  profundidad_temas       String?
+  retroalimentacion       String?
+  seguimiento_compromisos String?
+  aspectos_mejora         String?
+  programa                String
+  anio                    Int      @map("año")
+  numero_encuentro        String
+  unidad_regional         String
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  @@map("encuestas_estudiantes")
+}
+
+model EncuestaDocente {
+  id                       Int      @id @default(autoincrement())
+  unidad_regional          String
+  facultad                 String
+  programa                 String?
+  encuentro                String
+  anio                     Int      @map("año")
+  experiencia              Int?
+  profundidad_temas        String?
+  oportunidad_opinion      String?
+  claridad_respuestas      String?
+  convocatoria             String?
+  organizacion             String?
+  mecanismos_participacion String?
+  participacion_comunidad  String?
+  uso_canales_digitales    String?
+  aspectos_mejora          String?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  @@map("encuestas_docentes")
+}
