@@ -6,9 +6,11 @@ import {
   normalizeUnidadRegional,
   normalizeFacultad,
   normalizeEncuentro,
-  normalizeCategoria,
-  normalizeSubcategoria,
   computePlanMejoramiento,
+  checkColumnas,
+  normalizeRowKeys,
+  REQUIRED_COLS_ESTUDIANTES,
+  REQUIRED_COLS_DOCENTES,
 } from "@/lib/normalize-text";
 
 export type PreviewRow = {
@@ -29,6 +31,11 @@ export type PreviewResponse = {
   rows: PreviewRow[];
 };
 
+/** Clave compuesta para lookup en memoria */
+function makeKey(encuentro: string, anio: number, programa: string, unidad: string, facultad: string, actividad: string) {
+  return `${encuentro}||${anio}||${programa}||${unidad}||${facultad}||${actividad}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -36,23 +43,46 @@ export async function POST(request: NextRequest) {
     const tipo = formData.get("tipo") as "estudiantes" | "docentes" | null;
 
     if (!file) return NextResponse.json({ error: "No se recibió archivo" }, { status: 400 });
-    if (!tipo) return NextResponse.json({ error: "Se requiere tipo: estudiantes | docentes" }, { status: 400 });
+    if (!tipo) return NextResponse.json({ error: "Falta tipo: estudiantes | docentes" }, { status: 400 });
 
+    // ── Parsear Excel ────────────────────────────────────────────────────────
     const buffer = Buffer.from(await file.arrayBuffer());
     const wb = XLSX.read(buffer, { type: "buffer" });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
-    const preview: PreviewRow[] = [];
+    if (rawRows.length === 0) {
+      return NextResponse.json({ error: "El archivo está vacío" }, { status: 400 });
+    }
+
+    // ── Validar columnas requeridas ──────────────────────────────────────────
+    const required = tipo === "estudiantes" ? REQUIRED_COLS_ESTUDIANTES : REQUIRED_COLS_DOCENTES;
+    const faltantes = checkColumnas(rawRows[0] as Record<string, unknown>, required);
+    if (faltantes.length > 0) {
+      return NextResponse.json(
+        { error: `Columnas faltantes en el archivo: ${faltantes.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    // ── Normalizar filas del archivo ─────────────────────────────────────────
+    type ParsedRow = {
+      programa: string; unidad_regional: string; facultad: string;
+      encuentro: string; actividad: string; anio: number; plan: string;
+    };
+
+    const parsed: ParsedRow[] = [];
     let omitidos = 0;
 
-    for (const row of rows) {
-      const rawPrograma  = String(row["PROGRAMA"] ?? "").trim();
-      const rawUnidad    = String(row["UNIDAD REGIONAL"] ?? "").trim();
-      const rawFacultad  = String(row["FACULTAD"] ?? "").trim();
-      const rawEncuentro = String(row["ENCUENTRO"] ?? "").trim();
-      const rawActividad = String(row["ACTIVIDAD"] ?? "").trim();
-      const anio         = Number(row["AÑO"] ?? 0);
+    for (const rawRow of rawRows) {
+      const row = normalizeRowKeys(rawRow);
+
+      const rawPrograma  = String(row["programa"]       ?? "").trim();
+      const rawUnidad    = String(row["unidad regional"] ?? "").trim();
+      const rawFacultad  = String(row["facultad"]        ?? "").trim();
+      const rawEncuentro = String(row["encuentro"]       ?? "").trim();
+      const rawActividad = String(row["actividad"]       ?? "").trim();
+      const anio         = Number(row["año"] ?? 0);
 
       if (!rawPrograma || !rawEncuentro || !anio || !rawActividad) {
         omitidos++;
@@ -60,60 +90,63 @@ export async function POST(request: NextRequest) {
       }
 
       const programa       = normalizePrograma(rawPrograma);
-      const unidadRegional = normalizeUnidadRegional(rawUnidad);
+      const unidad_regional = normalizeUnidadRegional(rawUnidad);
       const facultad       = normalizeFacultad(rawFacultad);
       const encuentro      = normalizeEncuentro(rawEncuentro);
-      const categoria      = normalizeCategoria(String(row["CATEGORIA"] ?? "").trim());
-      const subcategoria   = normalizeSubcategoria(String(row["SUBCATEGORIA"] ?? "").trim());
-      const plan           = computePlanMejoramiento(encuentro, anio, programa, unidadRegional, facultad);
+      const plan           = computePlanMejoramiento(encuentro, anio, programa, unidad_regional, facultad);
 
-      // Buscar si ya existe en BD
-      let exists = false;
-      if (tipo === "estudiantes") {
-        const found = await prisma.planMejoramientoEstudiante.findUnique({
-          where: {
-            encuentro_anio_programa_unidad_regional_facultad_actividad: {
-              encuentro, anio, programa, unidad_regional: unidadRegional, facultad, actividad: rawActividad,
-            },
-          },
-          select: { id: true },
-        });
-        exists = found !== null;
-      } else {
-        const found = await prisma.planMejoramientoDocente.findUnique({
-          where: {
-            encuentro_anio_programa_unidad_regional_facultad_actividad: {
-              encuentro, anio, programa, unidad_regional: unidadRegional, facultad, actividad: rawActividad,
-            },
-          },
-          select: { id: true },
-        });
-        exists = found !== null;
-      }
-
-      preview.push({
-        plan,
-        actividad: rawActividad,
-        programa,
-        unidad_regional: unidadRegional,
-        encuentro,
-        anio,
-        status: exists ? "actualizar" : "nuevo",
-        // suppress unused
-        ...({ categoria, subcategoria } as object),
-      } as PreviewRow);
+      parsed.push({ programa, unidad_regional, facultad, encuentro, actividad: rawActividad, anio, plan });
     }
 
-    const nuevos    = preview.filter((r) => r.status === "nuevo").length;
-    const actualizar = preview.filter((r) => r.status === "actualizar").length;
+    if (parsed.length === 0) {
+      return NextResponse.json({ total: 0, nuevos: 0, actualizar: 0, omitidos, rows: [] });
+    }
+
+    // ── Batch query: traer todos los registros que coincidan con los encuentros/años del archivo ──
+    const aniosEnArchivo    = [...new Set(parsed.map((r) => r.anio))];
+    const encuentrosEnArchivo = [...new Set(parsed.map((r) => r.encuentro))];
+
+    const existingSet = new Set<string>();
+
+    if (tipo === "estudiantes") {
+      const existing = await prisma.planMejoramientoEstudiante.findMany({
+        where: { anio: { in: aniosEnArchivo }, encuentro: { in: encuentrosEnArchivo } },
+        select: { encuentro: true, anio: true, programa: true, unidad_regional: true, facultad: true, actividad: true },
+      });
+      for (const r of existing) {
+        existingSet.add(makeKey(r.encuentro, r.anio, r.programa, r.unidad_regional, r.facultad, r.actividad));
+      }
+    } else {
+      const existing = await prisma.planMejoramientoDocente.findMany({
+        where: { anio: { in: aniosEnArchivo }, encuentro: { in: encuentrosEnArchivo } },
+        select: { encuentro: true, anio: true, programa: true, unidad_regional: true, facultad: true, actividad: true },
+      });
+      for (const r of existing) {
+        existingSet.add(makeKey(r.encuentro, r.anio, r.programa, r.unidad_regional, r.facultad, r.actividad));
+      }
+    }
+
+    // ── Clasificar filas ─────────────────────────────────────────────────────
+    const rows: PreviewRow[] = parsed.map((r) => ({
+      plan: r.plan,
+      actividad: r.actividad,
+      programa: r.programa,
+      unidad_regional: r.unidad_regional,
+      encuentro: r.encuentro,
+      anio: r.anio,
+      status: existingSet.has(makeKey(r.encuentro, r.anio, r.programa, r.unidad_regional, r.facultad, r.actividad))
+        ? "actualizar"
+        : "nuevo",
+    }));
 
     return NextResponse.json({
-      total: preview.length,
-      nuevos,
-      actualizar,
+      total:     rows.length,
+      nuevos:    rows.filter((r) => r.status === "nuevo").length,
+      actualizar: rows.filter((r) => r.status === "actualizar").length,
       omitidos,
-      rows: preview,
+      rows,
     } satisfies PreviewResponse);
+
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
     return NextResponse.json({ error: message }, { status: 500 });

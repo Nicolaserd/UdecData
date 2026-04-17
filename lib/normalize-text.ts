@@ -50,6 +50,48 @@ export function normalizeCalificacion(value: string | null | undefined): string 
   return toSentenceCase(value.trim());
 }
 
+// ─── Columnas requeridas ──────────────────────────────────────────────────────
+
+export const REQUIRED_COLS_ESTUDIANTES = [
+  "CATEGORIA", "SUBCATEGORIA", "ACTIVIDAD",
+  "FECHA DE CUMPLIMIENTO", "CALIFICACION DE CUMPLIMIENTO",
+  "EFECTIVIDAD", "PROGRAMA", "UNIDAD REGIONAL", "FACULTAD",
+  "AÑO", "ENCUENTRO", "formulado",
+] as const;
+
+export const REQUIRED_COLS_DOCENTES = [
+  "CATEGORIA", "SUBCATEGORIA", "ACTIVIDAD",
+  "FECHA DE CUMPLIMIENTO", "CALIFICACION DE CUMPLIMIENTO",
+  "PROGRAMA", "UNIDAD REGIONAL", "FACULTAD",
+  "AÑO", "ENCUENTRO", "formulado", "CALIFICACIÓN",
+] as const;
+
+/**
+ * Devuelve una copia del objeto con todas las claves en minúscula y sin espacios
+ * al inicio/fin, para acceso insensible a mayúsculas.
+ */
+export function normalizeRowKeys(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k.trim().toLowerCase()] = v;
+  }
+  return out;
+}
+
+/**
+ * Verifica que el objeto (primera fila del Excel) tenga todas las columnas requeridas.
+ * Comparación insensible a mayúsculas/minúsculas y espacios al inicio/fin.
+ * Retorna los nombres de columnas faltantes.
+ */
+export function checkColumnas(
+  row: Record<string, unknown>,
+  required: readonly string[]
+): string[] {
+  const normalize = (s: string) => s.trim().toLowerCase();
+  const keys = Object.keys(row).map(normalize);
+  return required.filter((col) => !keys.includes(normalize(col)));
+}
+
 /**
  * Recalcula PLAN DE MEJORAMIENTO en mayúscula total
  * (fórmula Excel: MAYUSC("plan de mejoramiento " & ...))

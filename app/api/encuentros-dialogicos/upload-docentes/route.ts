@@ -11,6 +11,9 @@ import {
   normalizeFormulado,
   normalizeCalificacion,
   computePlanMejoramiento,
+  checkColumnas,
+  normalizeRowKeys,
+  REQUIRED_COLS_DOCENTES,
 } from "@/lib/normalize-text";
 
 function parseFecha(value: unknown): string | null {
@@ -42,18 +45,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "El archivo está vacío" }, { status: 400 });
     }
 
+    // ── Validar columnas requeridas ────────────────────────────────────────
+    const faltantes = checkColumnas(rows[0] as Record<string, unknown>, REQUIRED_COLS_DOCENTES);
+    if (faltantes.length > 0) {
+      return NextResponse.json(
+        { error: `Columnas faltantes en el archivo: ${faltantes.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     let upserted = 0;
     const errors: string[] = [];
 
-    for (const row of rows) {
-      const rawCategoria    = String(row["CATEGORIA"] ?? "").trim();
-      const rawSubcategoria = String(row["SUBCATEGORIA"] ?? "").trim();
-      const rawActividad    = String(row["ACTIVIDAD"] ?? "").trim();
-      const rawPrograma     = String(row["PROGRAMA"] ?? "").trim();
-      const rawUnidad       = String(row["UNIDAD REGIONAL"] ?? "").trim();
-      const rawFacultad     = String(row["FACULTAD"] ?? "").trim();
-      const anio            = Number(row["AÑO"] ?? 0);
-      const rawEncuentro    = String(row["ENCUENTRO"] ?? "").trim();
+    for (const rawRow of rows) {
+      const row = normalizeRowKeys(rawRow);
+
+      const rawCategoria    = String(row["categoria"] ?? "").trim();
+      const rawSubcategoria = String(row["subcategoria"] ?? "").trim();
+      const rawActividad    = String(row["actividad"] ?? "").trim();
+      const rawPrograma     = String(row["programa"] ?? "").trim();
+      const rawUnidad       = String(row["unidad regional"] ?? "").trim();
+      const rawFacultad     = String(row["facultad"] ?? "").trim();
+      const anio            = Number(row["año"] ?? 0);
+      const rawEncuentro    = String(row["encuentro"] ?? "").trim();
 
       if (!rawCategoria || !rawActividad || !rawPrograma || !rawEncuentro || !anio) {
         errors.push(`Fila omitida por datos incompletos: ${rawActividad || "(sin actividad)"}`);
@@ -73,13 +87,10 @@ export async function POST(request: NextRequest) {
         encuentro, anio, programa, unidadRegional, facultad
       );
 
-      const calificacionRaw = row["CALIFICACION DE CUMPLIMIENTO"];
-      const evidencias =
-        row["EVIDENCIAS DE CUMPLIMIENTO "] != null
-          ? String(row["EVIDENCIAS DE CUMPLIMIENTO "]).trim()
-          : row["EVIDENCIAS DE CUMPLIMIENTO"] != null
-          ? String(row["EVIDENCIAS DE CUMPLIMIENTO"]).trim()
-          : null;
+      const calificacionRaw = row["calificacion de cumplimiento"];
+      const evidencias      = row["evidencias de cumplimiento"] != null
+        ? String(row["evidencias de cumplimiento"]).trim()
+        : null;
 
       await prisma.planMejoramientoDocente.upsert({
         where: {
@@ -96,27 +107,27 @@ export async function POST(request: NextRequest) {
           categoria,
           subcategoria,
           plan_de_mejoramiento: planDeMejoramiento,
-          fecha_cumplimiento: parseFecha(row["FECHA DE CUMPLIMIENTO"]),
+          fecha_cumplimiento: parseFecha(row["fecha de cumplimiento"]),
           evidencias_cumplimiento: evidencias,
-          calificacion_cumplimiento: calificacionRaw != null ? Number(calificacionRaw) : null,
+          calificacion_cumplimiento: calificacionRaw != null && calificacionRaw !== "" ? Number(calificacionRaw) || null : null,
           formulado: normalizeFormulado(row["formulado"] != null ? String(row["formulado"]) : null),
-          calificacion: normalizeCalificacion(row["CALIFICACIÓN"] != null ? String(row["CALIFICACIÓN"]) : null),
+          calificacion: normalizeCalificacion(row["calificación"] != null ? String(row["calificación"]) : null),
         },
         create: {
           categoria,
           subcategoria,
           plan_de_mejoramiento: planDeMejoramiento,
           actividad,
-          fecha_cumplimiento: parseFecha(row["FECHA DE CUMPLIMIENTO"]),
+          fecha_cumplimiento: parseFecha(row["fecha de cumplimiento"]),
           evidencias_cumplimiento: evidencias,
-          calificacion_cumplimiento: calificacionRaw != null ? Number(calificacionRaw) : null,
+          calificacion_cumplimiento: calificacionRaw != null && calificacionRaw !== "" ? Number(calificacionRaw) || null : null,
           programa,
           unidad_regional: unidadRegional,
           facultad,
           anio,
           encuentro,
           formulado: normalizeFormulado(row["formulado"] != null ? String(row["formulado"]) : null),
-          calificacion: normalizeCalificacion(row["CALIFICACIÓN"] != null ? String(row["CALIFICACIÓN"]) : null),
+          calificacion: normalizeCalificacion(row["calificación"] != null ? String(row["calificación"]) : null),
         },
       });
 

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Download,
   GraduationCap,
+  Info,
   Loader2,
   Plus,
   RefreshCw,
@@ -14,6 +15,38 @@ import {
   X,
 } from "lucide-react";
 import { NavBar } from "@/components/layout/navbar";
+
+// ─── Columnas requeridas ──────────────────────────────────────────────────────
+
+const COLUMNAS_ESTUDIANTES = [
+  "CATEGORIA",
+  "SUBCATEGORIA",
+  "ACTIVIDAD",
+  "FECHA DE CUMPLIMIENTO",
+  "CALIFICACION DE CUMPLIMIENTO",
+  "EFECTIVIDAD",
+  "PROGRAMA",
+  "UNIDAD REGIONAL",
+  "FACULTAD",
+  "AÑO",
+  "ENCUENTRO",
+  "FORMULADO",
+] as const;
+
+const COLUMNAS_DOCENTES = [
+  "CATEGORIA",
+  "SUBCATEGORIA",
+  "ACTIVIDAD",
+  "FECHA DE CUMPLIMIENTO",
+  "CALIFICACION DE CUMPLIMIENTO",
+  "PROGRAMA",
+  "UNIDAD REGIONAL",
+  "FACULTAD",
+  "AÑO",
+  "ENCUENTRO",
+  "FORMULADO",
+  "CALIFICACIÓN",
+] as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,6 +99,53 @@ const initialSection = (): SectionState => ({
   warnings: [],
   upserted: 0,
 });
+
+// ─── ColumnasInfo ─────────────────────────────────────────────────────────────
+
+function ColumnasInfo({ columnas }: { columnas: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 text-xs font-semibold text-[#0058be] underline-offset-2 hover:underline"
+      >
+        Columnas estándar
+        <Info className="size-3.5" />
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 z-30 mb-2 w-72 rounded-xl border border-[#bdcabb]/30 bg-[#191c1d] p-4 shadow-xl">
+          <p className="mb-3 text-xs leading-relaxed text-[#e1e3e4]">
+            El archivo debe contener estas columnas; el nombre no distingue
+            mayúsculas/minúsculas y la posición no importa.
+          </p>
+          <ul className="space-y-1">
+            {columnas.map((col) => (
+              <li key={col} className="flex items-center gap-2 text-[11px] text-white">
+                <span className="size-1.5 shrink-0 rounded-full bg-[#71dc8a]" />
+                <code className="font-mono">{col}</code>
+              </li>
+            ))}
+          </ul>
+          {/* Arrow */}
+          <div className="absolute -bottom-1.5 left-4 size-3 rotate-45 rounded-sm border-b border-r border-[#bdcabb]/30 bg-[#191c1d]" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── PreviewModal ──────────────────────────────────────────────────────────────
 
@@ -215,6 +295,7 @@ function UploadCard({
   description,
   icon,
   accentColor,
+  columnas,
   state,
   onFileChange,
   onPreview,
@@ -225,6 +306,7 @@ function UploadCard({
   description: string;
   icon: React.ReactNode;
   accentColor: "primary" | "secondary";
+  columnas: readonly string[];
   state: SectionState;
   onFileChange: (file: File | null) => void;
   onPreview: () => void;
@@ -351,6 +433,11 @@ function UploadCard({
           <Download className="size-4" />
           {exportLabel}
         </button>
+      </div>
+
+      {/* Columnas requeridas */}
+      <div className="mt-4 pt-4 border-t border-[#edeeef]">
+        <ColumnasInfo columnas={columnas} />
       </div>
     </div>
   );
@@ -504,6 +591,7 @@ export default function EncuentrosDialogicosPage() {
               description="Cargue los archivos consolidados de los encuentros con estudiantes. La columna Plan de Mejoramiento se genera automáticamente. Formatos aceptados: XLSX."
               icon={<Users className="size-7" />}
               accentColor="primary"
+              columnas={COLUMNAS_ESTUDIANTES}
               state={estudiantes}
               onFileChange={(f) => setEstudiantes((p) => ({ ...p, file: f, uploadState: "idle", message: "", warnings: [] }))}
               onPreview={() => runPreview("estudiantes")}
@@ -516,6 +604,7 @@ export default function EncuentrosDialogicosPage() {
               description="Gestione y suba los compromisos académicos derivados de las sesiones con el cuerpo docente. La columna Plan de Mejoramiento se genera automáticamente. Formatos aceptados: XLSX."
               icon={<GraduationCap className="size-7" />}
               accentColor="secondary"
+              columnas={COLUMNAS_DOCENTES}
               state={docentes}
               onFileChange={(f) => setDocentes((p) => ({ ...p, file: f, uploadState: "idle", message: "", warnings: [] }))}
               onPreview={() => runPreview("docentes")}
@@ -524,18 +613,6 @@ export default function EncuentrosDialogicosPage() {
             />
           </div>
 
-          {/* Fórmula */}
-          <div className="mt-8 rounded-xl border border-[#bdcabb]/30 bg-white p-6 shadow-sm">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-[#6e7a6e]">
-              Fórmula — Plan de Mejoramiento
-            </p>
-            <code className="block rounded bg-[#f3f4f5] px-4 py-3 text-sm text-[#191c1d]">
-              MAYUSC(&quot;plan de mejoramiento &quot; &amp; [ENCUENTRO] &amp; &quot; &quot; &amp; [AÑO] &amp; &quot; : &quot; &amp; [PROGRAMA] &amp; &quot; &quot; &amp; [UNIDAD REGIONAL] &amp; &quot; &quot; &amp; [FACULTAD])
-            </code>
-            <p className="mt-2 text-xs text-[#6e7a6e]">
-              Los campos de texto se normalizan automáticamente al cargar el archivo.
-            </p>
-          </div>
         </div>
       </section>
 

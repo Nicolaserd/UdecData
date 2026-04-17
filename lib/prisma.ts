@@ -12,6 +12,16 @@ function createPrismaClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma || createPrismaClient();
+// Si la instancia cacheada no tiene los modelos nuevos (post prisma generate sin reiniciar),
+// se descarta y se crea una fresca.
+function getOrCreateClient() {
+  const cached = globalForPrisma.prisma;
+  if (cached && typeof (cached as unknown as Record<string, unknown>).planMejoramientoEstudiante !== "undefined") {
+    return cached;
+  }
+  return createPrismaClient();
+}
+
+export const prisma = getOrCreateClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
