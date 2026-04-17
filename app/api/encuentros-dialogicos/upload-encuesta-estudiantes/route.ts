@@ -50,11 +50,6 @@ export async function POST(request: NextRequest) {
       const seguimRaw       = getByPrefix(row, "¿cómo califica el seguimiento");
       const mejoraRaw       = getByPrefix(row, "¿qué aspectos considera que podrían mejorarse");
 
-      if (!unidad_regional || !programa) {
-        warnings.push(`Fila omitida: sin unidad regional o programa`);
-        continue;
-      }
-
       toInsert.push({
         semestre:                semestre   ? toSentenceCase(semestre) : null,
         experiencia_general:     Number(expRaw) || null,

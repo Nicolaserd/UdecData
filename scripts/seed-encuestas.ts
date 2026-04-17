@@ -1,5 +1,5 @@
 /**
- * Seed script: carga Encuesta_docentes.xlsx y Encuesta_estudiante.xlsx en la BD.
+ * Seed script: carga encuestas_docentes.xlsx y encuestas_estudiantes.xlsx en la BD.
  * Ejecutar con: npx tsx scripts/seed-encuestas.ts
  */
 import "dotenv/config";
@@ -7,12 +7,6 @@ import * as XLSX from "xlsx";
 import path from "path";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import {
-  normalizeRowKeys,
-  extractPrograma,
-  getByPrefix,
-  toSentenceCase,
-} from "../lib/normalize-text";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL no configurado");
@@ -20,119 +14,109 @@ if (!connectionString) throw new Error("DATABASE_URL no configurado");
 const adapter = new PrismaPg({ connectionString });
 const prisma  = new PrismaClient({ adapter });
 
-const DATA_DIR = path.join(process.cwd(), "Encuentrosdialogicos", "datos");
+const DATA_DIR = path.join(process.cwd(), "encuentros");
+
+const str       = (v: unknown): string => (v != null && String(v).trim() !== "" ? String(v).trim() : "");
+const strOrNull = (v: unknown): string | null => (v != null && String(v).trim() !== "" ? String(v).trim() : null);
+const numOrNull = (v: unknown): number | null => {
+  if (v == null || String(v).trim() === "") return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+};
+
+const FACULTAD_COLS = [
+  "Facultad de Ciencias Administrativas, Económicas y Contables",
+  "Facultad de Ciencias Agropecuarias",
+  "Facultad de Ciencias del Deporte y la Educación Física",
+  "Facultad de Educación",
+  "Facultad de Ingeniería",
+  "Facultad de Ciencias de la Salud",
+  "Facultad de Ciencias Sociales, Humanidades y Ciencias Políticas",
+  "Posgrados",
+];
+
+// Extrae el programa buscando en la sub-columna que coincida con la facultad del registro
+function extractPrograma(row: Record<string, unknown>): string | null {
+  const facultad = str(row["Facultad"]);
+  // Intentar con la columna que coincide con la facultad
+  if (facultad && row[facultad] != null && String(row[facultad]).trim() !== "") {
+    return String(row[facultad]).trim();
+  }
+  // Fallback: buscar cualquier sub-columna de facultad con valor
+  for (const col of FACULTAD_COLS) {
+    if (row[col] != null && String(row[col]).trim() !== "") {
+      return String(row[col]).trim();
+    }
+  }
+  return null;
+}
+
+// Extrae el año desde el string de fecha: "miércoles, 3 de septiembre de 2025" → 2025
+function extractAnio(fecha: unknown): number {
+  if (fecha == null) return 2025;
+  const match = String(fecha).match(/\b(20\d{2})\b/);
+  return match ? parseInt(match[1]) : 2025;
+}
 
 // ── DOCENTES ──────────────────────────────────────────────────────────────────
 async function seedDocentes() {
-  const wb   = XLSX.readFile(path.join(DATA_DIR, "Encuesta_docentes.xlsx"));
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: null });
+  const wb   = XLSX.readFile(path.join(DATA_DIR, "encuestas_docentes.xlsx"));
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+    wb.Sheets["Encuestas Docentes"],
+    { defval: null }
+  );
 
-  // Limpiar tabla antes de insertar
   const deleted = await prisma.encuestaDocente.deleteMany();
   console.log(`  Eliminados ${deleted.count} registros previos de docentes`);
 
-  const toInsert = [];
-  let omitidos = 0;
-
-  for (const rawRow of rows) {
-    const row = normalizeRowKeys(rawRow);
-
-    const unidad_regional = String(row["unidad regional"] ?? "").trim();
-    const facultad        = String(row["facultad"]        ?? "").trim();
-    // Encuentro ya viene en mayúsculas en el archivo
-    const encuentro = String(row["encuentro"] ?? "").trim().toUpperCase() || "PRIMER ENCUENTRO";
-    // Año: todos son 2025 (PRIMER ENCUENTRO septiembre 2025)
-    const anio = 2025;
-    const programa = extractPrograma(row) || null;
-
-    if (!unidad_regional || !facultad) { omitidos++; continue; }
-
-    const norm = (v: unknown) =>
-      v != null && String(v).trim() !== "" ? toSentenceCase(String(v).trim()) : null;
-
-    const expRaw     = getByPrefix(row, "en una escala del 1 al 5");
-    const profRaw    = getByPrefix(row, "consideras que la profundidad");
-    const opinionRaw = getByPrefix(row, "consideras que la oportunidad");
-    const claridadRaw = row["claridad en las respuestas a la comunidad estudiantil"];
-    const convRaw    = row["convocatoria, publicidad y difusión del evento"];
-    const orgRaw     = row["organización del evento"];
-    const mecRaw     = row["mecanismos de participación"];
-    const partRaw    = row["participación de la comunidad universitaria"];
-    const canalesRaw = row["uso de canales digitales"];
-    const mejoraRaw  = getByPrefix(row, "¿qué aspectos del evento");
-
-    toInsert.push({
-      unidad_regional:          toSentenceCase(unidad_regional),
-      facultad:                 toSentenceCase(facultad),
-      programa,
-      encuentro,
-      anio,
-      experiencia:              expRaw != null ? Number(expRaw) || null : null,
-      profundidad_temas:        norm(profRaw),
-      oportunidad_opinion:      norm(opinionRaw),
-      claridad_respuestas:      norm(claridadRaw),
-      convocatoria:             norm(convRaw),
-      organizacion:             norm(orgRaw),
-      mecanismos_participacion: norm(mecRaw),
-      participacion_comunidad:  norm(partRaw),
-      uso_canales_digitales:    norm(canalesRaw),
-      aspectos_mejora:          mejoraRaw != null && String(mejoraRaw).trim() !== "" ? String(mejoraRaw).trim() : null,
-    });
-  }
+  const toInsert = rows.map((row) => ({
+    unidad_regional:          str(row["Unidad Regional"]),
+    facultad:                 str(row["Facultad"]),
+    programa:                 extractPrograma(row),
+    encuentro:                str(row["Encuentro"]) || "PRIMER ENCUENTRO",
+    anio:                     2025,
+    experiencia:              numOrNull(row["En una escala del 1 al 5, ¿Cómo calificarías tu experiencia en el Encuentro Dialógico y Formativo?"]),
+    profundidad_temas:        strOrNull(row["Consideras que la profundidad con la cual se abarcaron los temas tratados en el ejercicio del Encuentro Dialógico y Formativo, fueron discutidos de manera:"]),
+    oportunidad_opinion:      strOrNull(row["Consideras que la oportunidad dada a los asistentes inscritos para opinar durante el ejercicio del Encuentro Dialógico y Formativo fue"]),
+    claridad_respuestas:      strOrNull(row["Claridad en las respuestas a la comunidad estudiantil"]),
+    convocatoria:             strOrNull(row["Convocatoria, publicidad y difusión del evento"]),
+    organizacion:             strOrNull(row["Organización del evento"]),
+    mecanismos_participacion: strOrNull(row["Mecanismos de participación"]),
+    participacion_comunidad:  strOrNull(row["Participación de la comunidad Universitaria"]),
+    uso_canales_digitales:    strOrNull(row["Uso de canales digitales"]),
+    aspectos_mejora:          strOrNull(row["¿Qué aspectos del evento crees que podrían mejorarse para futuros encuentros? Recuerda que tu opinión es parte de la mejora."]),
+  }));
 
   await prisma.encuestaDocente.createMany({ data: toInsert });
-  console.log(`  Insertados ${toInsert.length} docentes (omitidos: ${omitidos})`);
+  console.log(`  Insertados ${toInsert.length} docentes`);
 }
 
 // ── ESTUDIANTES ───────────────────────────────────────────────────────────────
 async function seedEstudiantes() {
-  const wb   = XLSX.readFile(path.join(DATA_DIR, "Encuesta_estudiante.xlsx"));
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: null });
+  const wb   = XLSX.readFile(path.join(DATA_DIR, "encuestas_estudiantes.xlsx"));
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+    wb.Sheets["Encuestas Estudiantes"],
+    { defval: null }
+  );
 
   const deleted = await prisma.encuestaEstudiante.deleteMany();
   console.log(`  Eliminados ${deleted.count} registros previos de estudiantes`);
 
-  const toInsert = [];
-  let omitidos = 0;
-
-  for (const rawRow of rows) {
-    const row = normalizeRowKeys(rawRow);
-
-    const unidad_regional = String(row["unidad regional a la que pertenece"] ?? "").trim();
-    // Programa ya viene directo en esta plantilla
-    const programaRaw  = String(row["programa"] ?? "").trim();
-    const programa     = programaRaw ? toSentenceCase(programaRaw) : "";
-    const anio         = Number(row["año"] ?? 0);
-    const numero_encuentro = String(row["nuero encuentro"] ?? "").trim().toUpperCase();
-
-    if (!unidad_regional || !programa || !anio || !numero_encuentro) { omitidos++; continue; }
-
-    const expRaw    = getByPrefix(row, "en una escala de 1 a 5 siendo 1 menos satisfecho");
-    const profRaw   = getByPrefix(row, "¿cómo califica la profundidad");
-    const retroRaw  = getByPrefix(row, "¿ha recibido retroalimentación");
-    const seguimRaw = getByPrefix(row, "¿cómo califica el seguimiento");
-    const mejoraRaw = getByPrefix(row, "¿qué aspectos considera que podrían mejorarse");
-    const semestre  = row["semestre que cursa"] != null ? String(row["semestre que cursa"]).trim() : null;
-
-    const norm = (v: unknown) =>
-      v != null && String(v).trim() !== "" ? toSentenceCase(String(v).trim()) : null;
-
-    toInsert.push({
-      semestre:                semestre   ? toSentenceCase(semestre) : null,
-      experiencia_general:     expRaw != null ? Number(expRaw) || null : null,
-      profundidad_temas:       norm(profRaw),
-      retroalimentacion:       norm(retroRaw),
-      seguimiento_compromisos: norm(seguimRaw),
-      aspectos_mejora:         mejoraRaw != null && String(mejoraRaw).trim() !== "" ? String(mejoraRaw).trim() : null,
-      programa,
-      anio,
-      numero_encuentro,
-      unidad_regional:         toSentenceCase(unidad_regional),
-    });
-  }
+  const toInsert = rows.map((row) => ({
+    semestre:                strOrNull(row["Semestre que cursa"]),
+    experiencia_general:     numOrNull(row["En una escala de 1 a 5 siendo 1 menos satisfecho, ¿ Cómo califica su experiencia general en el Encuentro Dialógico y Formativo?"]),
+    profundidad_temas:       strOrNull(row["¿Cómo califica la profundidad con la que se abordaron los temas tratados durante el Encuentro?"]),
+    retroalimentacion:       strOrNull(row["¿Ha recibido retroalimentación sobre los compromisos o acuerdos establecidos en el Encuentro?"]),
+    seguimiento_compromisos: strOrNull(row["¿Cómo califica el seguimiento de los compromisos establecidos después del Encuentro?"]),
+    aspectos_mejora:         strOrNull(row["¿Qué aspectos considera que podrían mejorarse para futuros Encuentros Dialógicos y Formativos?"]),
+    programa:                str(row["Programa"]),
+    anio:                    numOrNull(row["año"]) ?? 2025,
+    numero_encuentro:        str(row["Nuero Encuentro"]),
+    unidad_regional:         str(row["Unidad regional a la que pertenece"]),
+  }));
 
   await prisma.encuestaEstudiante.createMany({ data: toInsert });
-  console.log(`  Insertados ${toInsert.length} estudiantes (omitidos: ${omitidos})`);
+  console.log(`  Insertados ${toInsert.length} estudiantes`);
 }
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────

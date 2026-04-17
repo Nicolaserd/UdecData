@@ -55,11 +55,6 @@ export async function POST(request: NextRequest) {
       const canalesRaw      = getByPrefix(row, "uso de canales digitales");
       const mejoraRaw       = getByPrefix(row, "¿qué aspectos del evento");
 
-      if (!unidad_regional || !facultad) {
-        warnings.push(`Fila omitida: sin unidad regional o facultad`);
-        continue;
-      }
-
       const norm = (v: unknown) => v != null && String(v).trim() !== "" ? toSentenceCase(String(v).trim()) : null;
 
       toInsert.push({
