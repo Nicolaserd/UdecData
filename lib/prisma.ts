@@ -16,7 +16,7 @@ function createPrismaClient() {
 // se descarta y se crea una fresca.
 function getOrCreateClient() {
   const cached = globalForPrisma.prisma;
-  if (cached && typeof (cached as unknown as Record<string, unknown>).planMejoramientoEstudiante !== "undefined") {
+  if (cached && typeof (cached as unknown as Record<string, unknown>).chat !== "undefined") {
     return cached;
   }
   return createPrismaClient();

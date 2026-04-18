@@ -87,6 +87,28 @@ model EncuestaEstudiante {
   @@map("encuestas_estudiantes")
 }
 
+model Chat {
+  id         Int           @id @default(autoincrement())
+  agent_type String
+  title      String        @default("Nueva conversación")
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
+  messages   ChatMessage[]
+
+  @@map("chats")
+}
+
+model ChatMessage {
+  id         Int      @id @default(autoincrement())
+  chat_id    Int
+  role       String
+  content    String
+  created_at DateTime @default(now())
+  chat       Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
 model EncuestaDocente {
   id                       Int      @id @default(autoincrement())
   unidad_regional          String
