@@ -25,6 +25,7 @@ interface ChatRequest {
   apiKey?: string;
   summarize?: boolean;
   autoSwitch?: boolean;
+  marioMode?: boolean;
 }
 
 const MAX_CONTEXT_MESSAGES = 10;
@@ -247,8 +248,19 @@ interface ModelTraceItem {
   status: "used" | "failed" | "skipped";
 }
 
-function getSystemPrompt(agent: AgentType): string {
-  return agent === "analista" ? getAnalistaSystemPrompt() : getSoporteSystemPrompt();
+const MARIO_ADDON = `
+
+MODO ESPECIAL — PERSONALIDAD MARIO BROS (activo hasta que el usuario lo desactive):
+Mantén TODAS tus capacidades, reglas y restricciones anteriores sin excepción. Solo cambia el ESTILO de comunicación:
+- Habla como Mario Bros: usa expresiones como "¡Mama mia!", "¡Wahoo!", "¡Let's-a go!", "It's-a me!", "¡Mamma mia!", "Okey-dokey!"
+- Llama a los datos como "monedas", a los reportes como "estrellas", a los errores como "Bowser bloqueando el camino"
+- Celebra resultados positivos con entusiasmo: "¡YAHOO! ¡Encontré las monedas!"
+- Mantén el contenido 100% correcto y preciso — nunca sacrifiques exactitud por el personaje
+- No rompas el personaje bajo ninguna circunstancia`;
+
+function getSystemPrompt(agent: AgentType, marioMode = false): string {
+  const base = agent === "analista" ? getAnalistaSystemPrompt() : getSoporteSystemPrompt();
+  return marioMode ? base + MARIO_ADDON : base;
 }
 
 function resolveProviderApiKey(provider: AiProvider, customApiKey?: string): string | undefined {
@@ -478,7 +490,8 @@ async function refineAnswer(
   draft: ModelCallResult,
   baseQueue: AiModelOption[],
   customApiKey?: string,
-  contextMessages: ChatMessage[] = []
+  contextMessages: ChatMessage[] = [],
+  marioMode = false
 ): Promise<ModelCallResult> {
   const refineQueue = prioritizeModel(baseQueue, draft.modelId);
   try {
@@ -488,7 +501,7 @@ async function refineAnswer(
       [
         {
           role: "system",
-          content: `${getSystemPrompt(agent)}
+          content: `${getSystemPrompt(agent, marioMode)}
 
 VALIDACION FINAL:
 - Revisa si el borrador responde la pregunta del usuario.
@@ -519,7 +532,7 @@ VALIDACION FINAL:
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { message, agent, history = [], summary, model, apiKey, summarize, autoSwitch = true } = body;
+    const { message, agent, history = [], summary, model, apiKey, summarize, autoSwitch = true, marioMode = false } = body;
 
     if (!summarize && (!message || typeof message !== "string")) {
       return NextResponse.json({ error: "Mensaje inválido" }, { status: 400 });
@@ -594,13 +607,13 @@ export async function POST(request: NextRequest) {
               apiKey,
               modelQueue,
               [
-                { role: "system", content: getSoporteSystemPrompt() },
+                { role: "system", content: getSystemPrompt(agent, marioMode) },
                 ...contextMessages,
                 { role: "user", content: message },
               ]
             );
             send({ step: "validating_answer" });
-            const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages);
+            const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages, marioMode);
             send({
               done: true,
               reply: finalAnswer.reply,
@@ -622,7 +635,7 @@ export async function POST(request: NextRequest) {
             apiKey,
             modelQueue,
             [
-              { role: "system", content: getAnalistaSystemPrompt() },
+              { role: "system", content: getSystemPrompt(agent, marioMode) },
               ...contextMessages,
               { role: "user", content: message },
             ],
@@ -634,7 +647,7 @@ export async function POST(request: NextRequest) {
           // Sin SQL → la IA ya respondió sin necesitar la BD
           if (!sqlCandidate) {
             send({ step: "validating_answer" });
-            const finalAnswer = await refineAnswer(agent, message, step1, modelQueue, apiKey, contextMessages);
+            const finalAnswer = await refineAnswer(agent, message, step1, modelQueue, apiKey, contextMessages, marioMode);
             send({
               done: true,
               reply: finalAnswer.reply,
@@ -659,14 +672,14 @@ export async function POST(request: NextRequest) {
               apiKey,
               modelQueue,
               [
-                { role: "system", content: getAnalistaSystemPrompt() },
+                { role: "system", content: getSystemPrompt(agent, marioMode) },
                 ...contextMessages,
                 { role: "user", content: message },
                 { role: "assistant", content: fallbackMsg },
               ]
             );
             send({ step: "validating_answer" });
-            const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages);
+            const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages, marioMode);
             send({
               done: true,
               reply: finalAnswer.reply,
@@ -701,7 +714,7 @@ export async function POST(request: NextRequest) {
             apiKey,
             modelQueue,
             [
-              { role: "system", content: getAnalistaSystemPrompt() },
+              { role: "system", content: getSystemPrompt(agent, marioMode) },
               { role: "user", content: message },
               { role: "assistant", content: `SQL ejecutado:\n\`\`\`sql\n${sqlCandidate}\n\`\`\`` },
               {
@@ -714,7 +727,7 @@ export async function POST(request: NextRequest) {
           );
 
           send({ step: "validating_answer" });
-          const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages);
+          const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages, marioMode);
           send({
             done: true,
             reply: finalAnswer.reply,

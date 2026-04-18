@@ -211,9 +211,20 @@ function renderContent(content: string, isError: boolean) {
   });
 }
 
-// ── Burbuja de mensaje ─────────────────────────────────────────────────────────
-function ChatBubble({ msg, agentType }: { msg: Message; agentType: AgentType }) {
+// ── Ícono del agente (normal o Mario) ─────────────────────────────────────────
+function AgentAvatar({ agentType, marioMode, size = 36 }: { agentType: AgentType; marioMode: boolean; size?: number }) {
   const agent = AGENTS[agentType];
+  if (marioMode) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src="/deporte.png" alt="Mario" width={size} height={size} className="object-contain" />
+    );
+  }
+  return <>{agent.icon}</>;
+}
+
+// ── Burbuja de mensaje ─────────────────────────────────────────────────────────
+function ChatBubble({ msg, agentType, marioMode }: { msg: Message; agentType: AgentType; marioMode: boolean }) {
   const modelTraceText = formatModelTrace(msg.modelTrace);
   if (msg.role === "user") {
     return (
@@ -236,8 +247,8 @@ function ChatBubble({ msg, agentType }: { msg: Message; agentType: AgentType }) 
   }
   return (
     <div className="flex items-start gap-3 max-w-4xl">
-      <div className="w-9 h-9 rounded-full bg-[#2170e4]/10 shrink-0 flex items-center justify-center text-[#2170e4] mt-1">
-        {agent.icon}
+      <div className="w-9 h-9 rounded-full bg-[#2170e4]/10 shrink-0 flex items-center justify-center text-[#2170e4] mt-1 overflow-hidden">
+        <AgentAvatar agentType={agentType} marioMode={marioMode} size={36} />
       </div>
       <div className={`px-5 py-4 rounded-2xl rounded-tl-none shadow-sm border max-w-2xl ${msg.error ? "bg-red-50 border-red-200" : "bg-white border-[#bdcabb]/20"}`}>
         {msg.error && (
@@ -267,13 +278,12 @@ function ChatBubble({ msg, agentType }: { msg: Message; agentType: AgentType }) 
 }
 
 // ── Indicador de escritura ─────────────────────────────────────────────────────
-function TypingIndicator({ agentType, step }: { agentType: AgentType; step: string | null }) {
-  const agent = AGENTS[agentType];
+function TypingIndicator({ agentType, step, marioMode }: { agentType: AgentType; step: string | null; marioMode: boolean }) {
   const stepInfo = step ? STEP_LABELS[step] : null;
   return (
     <div className="flex items-start gap-3 max-w-4xl">
-      <div className="w-9 h-9 rounded-full bg-[#2170e4]/10 shrink-0 flex items-center justify-center text-[#2170e4] mt-1">
-        {agent.icon}
+      <div className="w-9 h-9 rounded-full bg-[#2170e4]/10 shrink-0 flex items-center justify-center text-[#2170e4] mt-1 overflow-hidden">
+        <AgentAvatar agentType={agentType} marioMode={marioMode} size={36} />
       </div>
       <div className="bg-white px-5 py-4 rounded-2xl rounded-tl-none shadow-sm border border-[#bdcabb]/20 min-w-45">
         <div className="flex gap-1.5 items-center">
@@ -303,6 +313,7 @@ export default function AgentesPage() {
   const [selectedModel, setSelectedModel] = useState("groq:llama-3.3-70b-versatile");
   const [customApiKey, setCustomApiKey] = useState("");
   const [autoSwitch, setAutoSwitch] = useState(true);
+  const [marioMode, setMarioMode] = useState(false);
   const [summaries, setSummaries] = useState<Record<AgentType, string>>({ analista: "", soporte: "" });
   const [summaryKeys, setSummaryKeys] = useState<Record<AgentType, string>>({ analista: "", soporte: "" });
 
@@ -502,6 +513,19 @@ export default function AgentesPage() {
     const text = input.trim();
     if (!text || loading) return;
 
+    const activatingMario = /listo!/i.test(text) && !marioMode;
+    if (activatingMario) {
+      setMarioMode(true);
+      new Audio("/ringtones-super-mario-bros.mp3").play().catch(() => {});
+      const marioGreeting: Message = {
+        id: genId(),
+        role: "assistant",
+        content: "¡It's-a me, Mario! ¡Wahoo! 🍄 ¡Let's-a go, vamos a buscar esas monedas de datos!",
+        timestamp: new Date(),
+      };
+      setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], marioGreeting] }));
+    }
+
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: new Date() };
     setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], userMsg] }));
     setInput("");
@@ -552,6 +576,7 @@ export default function AgentesPage() {
           summary: summaryForRequest || undefined,
           model: selectedModel,
           autoSwitch,
+          marioMode,
           ...(customApiKey ? { apiKey: customApiKey } : {}),
         }),
       });
@@ -803,18 +828,26 @@ export default function AgentesPage() {
                 {/* Botón selector de agente en móvil */}
                 <button
                   onClick={() => setMobileAgentSelectorOpen(!mobileAgentSelectorOpen)}
-                  className="lg:hidden w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#2170e4]/10 flex items-center justify-center text-[#2170e4] shrink-0 active:scale-95 transition-transform"
+                  className="lg:hidden w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#2170e4]/10 flex items-center justify-center text-[#2170e4] shrink-0 active:scale-95 transition-transform overflow-hidden"
                 >
-                  {agent.icon}
+                  <AgentAvatar agentType={activeAgent} marioMode={marioMode} size={40} />
                 </button>
-                <div className="hidden lg:flex w-11 h-11 rounded-2xl bg-[#2170e4]/10 items-center justify-center text-[#2170e4] shrink-0">
-                  {agent.icon}
+                <div className="hidden lg:flex w-11 h-11 rounded-2xl bg-[#2170e4]/10 items-center justify-center text-[#2170e4] shrink-0 overflow-hidden">
+                  <AgentAvatar agentType={activeAgent} marioMode={marioMode} size={44} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h1 className="text-base sm:text-lg font-bold text-slate-800 font-['Manrope'] truncate">{agent.name}</h1>
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                     <span className="text-[11px] sm:text-xs text-slate-500 font-['Work_Sans']">En línea</span>
+                    {marioMode && (
+                      <button
+                        onClick={() => setMarioMode(false)}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 hover:bg-red-200 text-red-600 text-[10px] font-semibold font-['Work_Sans'] transition-colors active:scale-95"
+                      >
+                        🍄 Salir de Mario
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -852,17 +885,17 @@ export default function AgentesPage() {
                   {/* Cabecera del agente en zona de mensajes (solo móvil, primera vez) */}
                   {messages.length <= 1 && (
                     <div className="lg:hidden text-center flex flex-col items-center pt-4 pb-2">
-                      <div className="w-14 h-14 rounded-full bg-white shadow-[0_20px_40px_rgba(0,104,47,0.06)] flex items-center justify-center mb-3">
-                        <span className="text-[#2170e4] text-2xl">{agent.icon}</span>
+                      <div className="w-14 h-14 rounded-full bg-white shadow-[0_20px_40px_rgba(0,104,47,0.06)] flex items-center justify-center mb-3 overflow-hidden">
+                        <span className="text-[#2170e4] text-2xl"><AgentAvatar agentType={activeAgent} marioMode={marioMode} size={56} /></span>
                       </div>
                       <h2 className="font-['Manrope'] font-bold text-slate-800 text-base">{agent.name}</h2>
                       <p className="text-xs text-slate-400 font-['Inter']">Asistente Virtual Institucional</p>
                     </div>
                   )}
                   {messages.map((msg) => (
-                    <ChatBubble key={msg.id} msg={msg} agentType={activeAgent} />
+                    <ChatBubble key={msg.id} msg={msg} agentType={activeAgent} marioMode={marioMode} />
                   ))}
-                  {loading && <TypingIndicator agentType={activeAgent} step={currentStep} />}
+                  {loading && <TypingIndicator agentType={activeAgent} step={currentStep} marioMode={marioMode} />}
                 </>
               )}
               <div ref={chatEndRef} />
