@@ -517,13 +517,16 @@ export default function AgentesPage() {
     if (activatingMario) {
       setMarioMode(true);
       new Audio("/ringtones-super-mario-bros.mp3").play().catch(() => {});
+      const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: new Date() };
       const marioGreeting: Message = {
         id: genId(),
         role: "assistant",
         content: "¡It's-a me, Mario! ¡Wahoo! 🍄 ¡Let's-a go, vamos a buscar esas monedas de datos!",
         timestamp: new Date(),
       };
-      setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], marioGreeting] }));
+      setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], userMsg, marioGreeting] }));
+      setInput("");
+      return;
     }
 
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: new Date() };
@@ -562,7 +565,7 @@ export default function AgentesPage() {
       const dbMessages = saved ? await fetchDbMessages(chatId) : await fetchDbMessages(chatId, CONTEXT_MESSAGE_LIMIT);
       const previousMessages = saved ? dbMessages.slice(0, -1) : dbMessages;
       history = persistedToContextMessages(previousMessages.slice(-CONTEXT_MESSAGE_LIMIT));
-      summaryForRequest = await getSummaryForRequest(activeAgent, dbMessages);
+      summaryForRequest = await getSummaryForRequest(activeAgent, previousMessages);
     }
 
     try {
