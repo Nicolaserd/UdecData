@@ -24,6 +24,7 @@ interface ChatRequest {
   model?: string;
   apiKey?: string;
   summarize?: boolean;
+  generateTitle?: boolean;
   autoSwitch?: boolean;
   marioMode?: boolean;
 }
@@ -532,9 +533,9 @@ VALIDACION FINAL:
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { message, agent, history = [], summary, model, apiKey, summarize, autoSwitch = true, marioMode = false } = body;
+    const { message, agent, history = [], summary, model, apiKey, summarize, generateTitle, autoSwitch = true, marioMode = false } = body;
 
-    if (!summarize && (!message || typeof message !== "string")) {
+    if (!summarize && !generateTitle && (!message || typeof message !== "string")) {
       return NextResponse.json({ error: "Mensaje inválido" }, { status: 400 });
     }
     if (message && message.length > 2000) {
@@ -554,6 +555,24 @@ export async function POST(request: NextRequest) {
       : selectedModelOption
         ? [selectedModelOption]
         : buildFallbackQueue(agent, model);
+
+    // ── Modo título — genera un título corto a partir del resumen ────────────
+    if (generateTitle && summary) {
+      const result = await callModelWithFallback(
+        apiKey,
+        buildFallbackQueue(agent, "groq:llama-3.1-8b-instant"),
+        [
+          {
+            role: "system",
+            content: "Eres un generador de títulos. Dado un resumen de conversación, devuelve ÚNICAMENTE un título de máximo 6 palabras en español. Sin comillas, sin puntuación al final, sin explicaciones.",
+          },
+          { role: "user", content: `Resume en máximo 6 palabras este contenido:\n\n${summary}` },
+        ],
+        60,
+        0.3
+      );
+      return NextResponse.json({ title: result.reply.trim().replace(/^["']|["']$/g, "") });
+    }
 
     // ── Modo resumen — respuesta JSON normal (no streaming) ───────────────────
     if (summarize) {

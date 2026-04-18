@@ -78,6 +78,28 @@ const STEP_LABELS: Record<string, { label: string; icon: string }> = {
 
 function genId() { return Math.random().toString(36).slice(2); }
 
+async function generateChatTitle(summary: string, agent: AgentType, customApiKey?: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/agentes/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "",
+        agent,
+        history: [],
+        summary,
+        generateTitle: true,
+        ...(customApiKey ? { apiKey: customApiKey } : {}),
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.title === "string" && data.title ? data.title : null;
+  } catch {
+    return null;
+  }
+}
+
 function formatChatTime(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
@@ -420,6 +442,22 @@ export default function AgentesPage() {
     }
   }
 
+  async function updateChatTitle(chatId: number, title: string) {
+    try {
+      await fetch(`/api/agentes/chats/${chatId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      setSavedChats((prev) => ({
+        ...prev,
+        [activeAgent]: prev[activeAgent].map((c) =>
+          c.id === chatId ? { ...c, title } : c
+        ),
+      }));
+    } catch { /* silencioso */ }
+  }
+
   async function refreshSummaryFromDb(agent: AgentType, chatId: number, dbMessages?: PersistedChatMessage[]) {
     const messagesFromDb = dbMessages ?? await fetchDbMessages(chatId);
     const summarySource = getRollingSummaryMessages(messagesFromDb);
@@ -566,6 +604,11 @@ export default function AgentesPage() {
       const previousMessages = saved ? dbMessages.slice(0, -1) : dbMessages;
       history = persistedToContextMessages(previousMessages.slice(-CONTEXT_MESSAGE_LIMIT));
       summaryForRequest = await getSummaryForRequest(activeAgent, previousMessages);
+      if (summaryForRequest && chatId) {
+        generateChatTitle(summaryForRequest, activeAgent, customApiKey).then((title) => {
+          if (title && chatId) updateChatTitle(chatId, title);
+        }).catch(() => {});
+      }
     }
 
     try {
