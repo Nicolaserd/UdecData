@@ -67,7 +67,7 @@ export async function POST(
     }
   }
 
-  const [message] = await prisma.$transaction([
+  const [message, updatedChat] = await prisma.$transaction([
     prisma.chatMessage.create({
       data: { chat_id: chatId, role, content },
     }),
@@ -77,5 +77,8 @@ export async function POST(
     }),
   ]);
 
-  return NextResponse.json(message, { status: 201 });
+  return NextResponse.json(
+    { ...message, chat_updated_at: updatedChat.updated_at },
+    { status: 201 }
+  );
 }

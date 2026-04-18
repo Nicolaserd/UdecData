@@ -33,6 +33,7 @@ interface PersistedChatMessage {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  chat_updated_at?: string;
 }
 
 interface ContextMessage {
@@ -313,6 +314,10 @@ export default function AgentesPage() {
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
+  // ── Estado móvil ──────────────────────────────────────────────────────────
+  const [mobileTab, setMobileTab] = useState<"chat" | "history" | "settings">("chat");
+  const [mobileAgentSelectorOpen, setMobileAgentSelectorOpen] = useState(false);
+
   const activeChatId = activeChatIds[activeAgent];
   const setAgentActiveChatId = (agent: AgentType, id: number | null) =>
     setActiveChatIds((prev) => ({ ...prev, [agent]: id }));
@@ -371,16 +376,17 @@ export default function AgentesPage() {
   }, [activeAgent, customApiKey]);
 
   // ── Guardar mensaje en BD — espera confirmación antes de continuar ──────────
-  async function persistMessage(chatId: number, role: "user" | "assistant", content: string): Promise<boolean> {
+  async function persistMessage(chatId: number, role: "user" | "assistant", content: string): Promise<PersistedChatMessage | null> {
     try {
       const res = await fetch(`/api/agentes/chats/${chatId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role, content }),
       });
-      return res.ok;
+      if (!res.ok) return null;
+      return await res.json();
     } catch {
-      return false;
+      return null;
     }
   }
 
@@ -443,6 +449,8 @@ export default function AgentesPage() {
     if (activeChatId === chat.id) return;
     setActiveChatId(chat.id);
     setLoadingMessages(true);
+    // En móvil, volver al tab de chat al seleccionar una conversación
+    setMobileTab("chat");
     try {
       const dbMsgs = await fetchDbMessages(chat.id);
       const msgs = toUiMessages(dbMsgs);
@@ -486,6 +494,7 @@ export default function AgentesPage() {
     }));
     setSummaries((prev) => ({ ...prev, [activeAgent]: "" }));
     setSummaryKeys((prev) => ({ ...prev, [activeAgent]: "" }));
+    setMobileTab("chat");
   }
 
   // ── Enviar mensaje ─────────────────────────────────────────────────────────
@@ -509,9 +518,25 @@ export default function AgentesPage() {
     let history = toContextMessages(conversations[activeAgent]).slice(-CONTEXT_MESSAGE_LIMIT);
 
     if (chatId) {
-      const userSaved = await persistMessage(chatId, "user", text);
-      const dbMessages = userSaved ? await fetchDbMessages(chatId) : await fetchDbMessages(chatId, CONTEXT_MESSAGE_LIMIT);
-      const previousMessages = userSaved ? dbMessages.slice(0, -1) : dbMessages;
+      const saved = await persistMessage(chatId, "user", text);
+      if (saved) {
+        setConversations((prev) => ({
+          ...prev,
+          [activeAgent]: prev[activeAgent].map((m) =>
+            m.id === userMsg.id ? { ...m, timestamp: new Date(saved.created_at) } : m
+          ),
+        }));
+        if (saved.chat_updated_at) {
+          setSavedChats((prev) => ({
+            ...prev,
+            [activeAgent]: prev[activeAgent].map((c) =>
+              c.id === chatId ? { ...c, updated_at: saved.chat_updated_at! } : c
+            ),
+          }));
+        }
+      }
+      const dbMessages = saved ? await fetchDbMessages(chatId) : await fetchDbMessages(chatId, CONTEXT_MESSAGE_LIMIT);
+      const previousMessages = saved ? dbMessages.slice(0, -1) : dbMessages;
       history = persistedToContextMessages(previousMessages.slice(-CONTEXT_MESSAGE_LIMIT));
       summaryForRequest = await getSummaryForRequest(activeAgent, dbMessages);
     }
@@ -566,20 +591,22 @@ export default function AgentesPage() {
                 timestamp: new Date(),
                 modelTrace: Array.isArray(event.modelTrace) ? event.modelTrace : undefined,
               };
-              // Esperar a que BD confirme antes de actualizar sidebar
               if (chatId) {
                 const saved = await persistMessage(chatId, "assistant", event.reply);
                 if (saved) {
+                  assistantMsg.timestamp = new Date(saved.created_at);
                   refreshSummaryFromDb(activeAgent, chatId).catch(() => {});
+                  if (saved.chat_updated_at) {
+                    setSavedChats((prev) => ({
+                      ...prev,
+                      [activeAgent]: prev[activeAgent].map((c) =>
+                        c.id === chatId ? { ...c, updated_at: saved.chat_updated_at! } : c
+                      ),
+                    }));
+                  }
                 }
               }
               setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], assistantMsg] }));
-              setSavedChats((prev) => ({
-                ...prev,
-                [activeAgent]: prev[activeAgent].map((c) =>
-                  c.id === chatId ? { ...c, updated_at: new Date().toISOString() } : c
-                ),
-              }));
             } else if (event.error) {
               setCurrentStep(null);
               setConversations((prev) => ({
@@ -609,13 +636,116 @@ export default function AgentesPage() {
   const agentChats = savedChats[activeAgent];
   const selectedModelLabel = MODELS.find((m) => m.id === selectedModel || m.model === selectedModel)?.label ?? selectedModel;
 
+  // ── Contenido compartido: Lista de historial ──────────────────────────────
+  const chatListContent = (
+    <>
+      {loadingChats ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-14 bg-slate-200/50 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : agentChats.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-slate-300">
+          <MessageSquare size={28} />
+          <p className="text-xs mt-2 font-['Work_Sans']">Sin conversaciones aún</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {agentChats.map((chat) => (
+            <div key={chat.id} className="group relative">
+              {deleteConfirmId === chat.id ? (
+                /* Confirmación de borrado */
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                  <p className="text-xs text-red-700 font-semibold mb-2">¿Eliminar esta conversación?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => deleteChat(chat.id)}
+                      disabled={deletingChatId === chat.id}
+                      className="flex-1 bg-red-500 text-white text-xs py-1.5 rounded-lg font-semibold hover:bg-red-600 transition-colors disabled:opacity-60 flex items-center justify-center gap-1"
+                    >
+                      {deletingChatId === chat.id ? (
+                        <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Eliminando...</>
+                      ) : "Sí, eliminar"}
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirmId(null)}
+                      className="flex-1 bg-white text-slate-600 text-xs py-1.5 rounded-lg font-semibold border border-slate-200 hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => loadChat(chat)}
+                  onKeyDown={(e) => e.key === "Enter" && loadChat(chat)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
+                    activeChatId === chat.id
+                      ? "bg-white shadow-sm border border-emerald-100"
+                      : "hover:bg-white hover:shadow-sm"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-1">
+                    <p className={`text-xs font-semibold leading-snug line-clamp-2 flex-1 ${
+                      activeChatId === chat.id ? "text-emerald-800" : "text-slate-700"
+                    }`}>
+                      {activeChatId === chat.id && (
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 mb-0.5" />
+                      )}
+                      {chat.title}
+                    </p>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(chat.id); }}
+                      className="shrink-0 p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 lg:opacity-0 lg:group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5 font-['Work_Sans'] flex items-center gap-1">
+                    <Clock size={9} />
+                    {formatChatTime(chat.updated_at)}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  // ── Contenido compartido: Selector de agentes ─────────────────────────────
+  const agentSelectorContent = (
+    <div className="flex gap-1 bg-slate-200/60 rounded-xl p-1">
+      {(Object.values(AGENTS) as typeof AGENTS[AgentType][]).map((ag) => (
+        <button
+          key={ag.id}
+          onClick={() => { setActiveAgent(ag.id); setDeleteConfirmId(null); setMobileAgentSelectorOpen(false); }}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeAgent === ag.id
+              ? "bg-white text-[#00843d] shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <span className={activeAgent === ag.id ? "text-[#00843d]" : "text-slate-400"}>
+            {ag.id === "analista" ? <BarChart2 size={14} /> : <Bot size={14} />}
+          </span>
+          {ag.id === "analista" ? "Analista" : "Soporte"}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="bg-[#f8f9fa] font-['Inter'] text-slate-800 min-h-screen flex flex-col overflow-hidden">
+    <div className="bg-[#f8f9fa] font-['Inter'] text-slate-800 h-[100dvh] flex flex-col overflow-hidden pt-16">
       <NavBar activePage="agentes" />
 
-      <div className="flex flex-1 relative">
-        {/* ── Sidebar ── */}
-        <aside className="bg-slate-50 w-72 border-r border-slate-200/60 flex flex-col h-[calc(100vh-64px)] fixed left-0 top-16 font-['Manrope'] overflow-hidden">
+      <div className="flex flex-1 relative overflow-hidden">
+        {/* ── Sidebar (solo desktop lg+) ── */}
+        <aside className="hidden lg:flex bg-slate-50 w-72 shrink-0 border-r border-slate-200/60 flex-col h-full font-['Manrope'] overflow-hidden">
 
           {/* Header */}
           <div className="px-4 pt-4 pb-2">
@@ -630,24 +760,7 @@ export default function AgentesPage() {
             </div>
 
             {/* Selector de agente */}
-            <div className="flex gap-1 mt-2 bg-slate-200/60 rounded-xl p-1">
-              {(Object.values(AGENTS) as typeof AGENTS[AgentType][]).map((ag) => (
-                <button
-                  key={ag.id}
-                  onClick={() => { setActiveAgent(ag.id); setDeleteConfirmId(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-                    activeAgent === ag.id
-                      ? "bg-white text-[#00843d] shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <span className={activeAgent === ag.id ? "text-[#00843d]" : "text-slate-400"}>
-                    {ag.id === "analista" ? <BarChart2 size={14} /> : <Bot size={14} />}
-                  </span>
-                  {ag.id === "analista" ? "Analista" : "Soporte"}
-                </button>
-              ))}
-            </div>
+            {agentSelectorContent}
           </div>
 
           {/* Lista de chats guardados */}
@@ -657,82 +770,7 @@ export default function AgentesPage() {
                 Historial ({agentChats.length}/20)
               </span>
             </div>
-
-            {loadingChats ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 bg-slate-200/50 rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : agentChats.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-300">
-                <MessageSquare size={28} />
-                <p className="text-xs mt-2 font-['Work_Sans']">Sin conversaciones aún</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {agentChats.map((chat) => (
-                  <div key={chat.id} className="group relative">
-                    {deleteConfirmId === chat.id ? (
-                      /* Confirmación de borrado */
-                      <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
-                        <p className="text-xs text-red-700 font-semibold mb-2">¿Eliminar esta conversación?</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => deleteChat(chat.id)}
-                            disabled={deletingChatId === chat.id}
-                            className="flex-1 bg-red-500 text-white text-xs py-1.5 rounded-lg font-semibold hover:bg-red-600 transition-colors disabled:opacity-60 flex items-center justify-center gap-1"
-                          >
-                            {deletingChatId === chat.id ? (
-                              <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Eliminando...</>
-                            ) : "Sí, eliminar"}
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmId(null)}
-                            className="flex-1 bg-white text-slate-600 text-xs py-1.5 rounded-lg font-semibold border border-slate-200 hover:bg-slate-50 transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => loadChat(chat)}
-                        onKeyDown={(e) => e.key === "Enter" && loadChat(chat)}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
-                          activeChatId === chat.id
-                            ? "bg-white shadow-sm border border-emerald-100"
-                            : "hover:bg-white hover:shadow-sm"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-1">
-                          <p className={`text-xs font-semibold leading-snug line-clamp-2 flex-1 ${
-                            activeChatId === chat.id ? "text-emerald-800" : "text-slate-700"
-                          }`}>
-                            {activeChatId === chat.id && (
-                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 mb-0.5" />
-                            )}
-                            {chat.title}
-                          </p>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(chat.id); }}
-                            className="shrink-0 p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-['Work_Sans'] flex items-center gap-1">
-                          <Clock size={9} />
-                          {formatChatTime(chat.updated_at)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            {chatListContent}
           </div>
 
           {/* Acciones inferiores */}
@@ -755,81 +793,223 @@ export default function AgentesPage() {
         </aside>
 
         {/* ── Main ── */}
-        <main className="flex-1 ml-72 flex flex-col h-[calc(100vh-64px)] bg-[#f8f9fa]">
-          {/* Header del agente */}
-          <div className="px-6 py-4 flex items-center justify-between border-b border-[#bdcabb]/30 bg-white/60 backdrop-blur-md sticky top-0 z-10">
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-2xl bg-[#2170e4]/10 flex items-center justify-center text-[#2170e4]">
-                {agent.icon}
+        <main className="flex-1 flex flex-col h-full min-h-0 bg-[#f8f9fa] pb-[76px] lg:pb-0 overflow-hidden">
+
+          {/* ── Vista Chat (Mobile: visible cuando mobileTab === "chat") ── */}
+          <div className={`flex-1 flex-col min-h-0 overflow-hidden ${mobileTab !== "chat" ? "hidden lg:flex" : "flex"}`}>
+            {/* Header del agente */}
+            <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-[#bdcabb]/30 bg-white/60 backdrop-blur-md shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                {/* Botón selector de agente en móvil */}
+                <button
+                  onClick={() => setMobileAgentSelectorOpen(!mobileAgentSelectorOpen)}
+                  className="lg:hidden w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#2170e4]/10 flex items-center justify-center text-[#2170e4] shrink-0 active:scale-95 transition-transform"
+                >
+                  {agent.icon}
+                </button>
+                <div className="hidden lg:flex w-11 h-11 rounded-2xl bg-[#2170e4]/10 items-center justify-center text-[#2170e4] shrink-0">
+                  {agent.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-base sm:text-lg font-bold text-slate-800 font-['Manrope'] truncate">{agent.name}</h1>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <span className="text-[11px] sm:text-xs text-slate-500 font-['Work_Sans']">En línea</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-slate-800 font-['Manrope']">{agent.name}</h1>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs text-slate-500 font-['Work_Sans']">En línea ahora</span>
-                  <span className="text-xs text-slate-400 font-['Work_Sans']">· {selectedModelLabel}</span>
+              {/* Botón nuevo chat en móvil */}
+              <button
+                onClick={handleNewChat}
+                className="lg:hidden p-2 rounded-xl text-[#00682f] hover:bg-emerald-50 active:scale-95 transition-all shrink-0"
+                aria-label="Nuevo Chat"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+
+            {/* Dropdown selector de agente en móvil */}
+            {mobileAgentSelectorOpen && (
+              <div className="lg:hidden px-4 py-3 bg-white border-b border-[#bdcabb]/20 shadow-sm">
+                {agentSelectorContent}
+              </div>
+            )}
+
+            {/* Mensajes */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-[#bdcabb]/50">
+              {loadingMessages ? (
+                <div className="flex flex-col gap-4 w-full">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className={`flex gap-3 ${i % 2 === 0 ? "justify-end" : ""}`}>
+                      {i % 2 !== 0 && <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-200 animate-pulse shrink-0" />}
+                      <div className={`h-14 sm:h-16 rounded-2xl animate-pulse bg-slate-200 ${i % 2 === 0 ? "w-48 sm:w-64" : "w-56 sm:w-80"}`} />
+                      {i % 2 === 0 && <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-200 animate-pulse shrink-0" />}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {/* Cabecera del agente en zona de mensajes (solo móvil, primera vez) */}
+                  {messages.length <= 1 && (
+                    <div className="lg:hidden text-center flex flex-col items-center pt-4 pb-2">
+                      <div className="w-14 h-14 rounded-full bg-white shadow-[0_20px_40px_rgba(0,104,47,0.06)] flex items-center justify-center mb-3">
+                        <span className="text-[#2170e4] text-2xl">{agent.icon}</span>
+                      </div>
+                      <h2 className="font-['Manrope'] font-bold text-slate-800 text-base">{agent.name}</h2>
+                      <p className="text-xs text-slate-400 font-['Inter']">Asistente Virtual Institucional</p>
+                    </div>
+                  )}
+                  {messages.map((msg) => (
+                    <ChatBubble key={msg.id} msg={msg} agentType={activeAgent} />
+                  ))}
+                  {loading && <TypingIndicator agentType={activeAgent} step={currentStep} />}
+                </>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input — en móvil se posiciona encima del bottom nav */}
+            <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white/80 border-t border-[#bdcabb]/30 shrink-0">
+              <div className="max-w-4xl mx-auto flex items-end gap-2 sm:gap-3 bg-[#edeeef] px-2 py-2 rounded-2xl shadow-inner border border-[#bdcabb]/20">
+                <button className="p-2 sm:p-2.5 text-slate-400 hover:text-[#00682f] transition-colors active:scale-90 shrink-0">
+                  <Paperclip size={18} />
+                </button>
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={agent.placeholder}
+                  rows={1}
+                  disabled={loading}
+                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-slate-800 py-2 sm:py-2.5 px-1 resize-none max-h-32 min-h-10 text-sm font-['Inter'] placeholder:text-transparent lg:placeholder:text-slate-400 disabled:opacity-50"
+                />
+                <button className="hidden sm:block p-2.5 text-slate-400 hover:text-[#00682f] transition-colors active:scale-90 shrink-0">
+                  <Mic size={18} />
+                </button>
+                <button
+                  onClick={sendMessage}
+                  disabled={!input.trim() || loading}
+                  className="bg-[#00843d] text-white p-2 sm:p-2.5 rounded-xl shadow hover:bg-[#00682f] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+              <p className="hidden sm:flex max-w-4xl mx-auto mt-2 px-2 text-[10px] text-slate-400 font-['Work_Sans'] items-center gap-1">
+                <AlertCircle size={11} />
+                La IA puede cometer errores. Verifica la información clave. · Enter para enviar, Shift+Enter para nueva línea.
+              </p>
+            </div>
+          </div>
+
+          {/* ── Vista Historial (solo mobile/tablet, cuando mobileTab === "history") ── */}
+          <div className={`flex-1 flex-col overflow-hidden ${mobileTab === "history" ? "flex lg:hidden" : "hidden"}`}>
+            <div className="px-4 py-4 border-b border-[#bdcabb]/30 bg-white/60 backdrop-blur-md">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-['Manrope'] font-bold text-slate-800 text-lg">Historial</h2>
+                <button
+                  onClick={handleNewChat}
+                  className="bg-[#00682f] text-white py-2 px-4 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-[#00843d] transition-all active:scale-95 text-xs"
+                >
+                  <Plus size={14} />
+                  Nuevo Chat
+                </button>
+              </div>
+              {agentSelectorContent}
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 pb-24">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider font-['Work_Sans']">
+                  Conversaciones ({agentChats.length}/20)
+                </span>
+              </div>
+              {chatListContent}
+            </div>
+          </div>
+
+          {/* ── Vista Ajustes (solo mobile/tablet, cuando mobileTab === "settings") ── */}
+          <div className={`flex-1 flex-col overflow-hidden ${mobileTab === "settings" ? "flex lg:hidden" : "hidden"}`}>
+            <div className="px-4 py-4 border-b border-[#bdcabb]/30 bg-white/60 backdrop-blur-md">
+              <h2 className="font-['Manrope'] font-bold text-slate-800 text-lg">Ajustes</h2>
+              <p className="text-xs text-slate-400 font-['Work_Sans'] mt-1">Configuración del agente</p>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-4">
+              {/* Agente activo */}
+              <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                <h3 className="font-['Manrope'] font-bold text-sm text-slate-700 mb-3">Agente Activo</h3>
+                {agentSelectorContent}
+              </div>
+
+              {/* Modelo y configuración */}
+              <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                <h3 className="font-['Manrope'] font-bold text-sm text-slate-700 mb-2">Modelo</h3>
+                <p className="text-xs text-slate-500 font-['Work_Sans'] mb-3">{selectedModelLabel}</p>
+                <button
+                  onClick={() => { setSettingsOpen(true); setMobileTab("chat"); }}
+                  className="w-full bg-[#00682f] text-white py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-[#00843d] transition-all active:scale-95 text-sm"
+                >
+                  <Settings size={16} />
+                  Configuración Avanzada
+                </button>
+              </div>
+
+              {/* Info del agente */}
+              <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                <h3 className="font-['Manrope'] font-bold text-sm text-slate-700 mb-2">Acerca del Agente</h3>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-[#2170e4]/10 flex items-center justify-center text-[#2170e4]">
+                    {agent.icon}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">{agent.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-[11px] text-slate-400 font-['Work_Sans']">En línea</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-
-          {/* Mensajes */}
-          <div className="flex-1 overflow-y-auto px-8 py-8 space-y-6 scrollbar-thin scrollbar-thumb-[#bdcabb]/50">
-            {loadingMessages ? (
-              <div className="flex flex-col gap-4 w-full">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className={`flex gap-3 ${i % 2 === 0 ? "justify-end" : ""}`}>
-                    {i % 2 !== 0 && <div className="w-9 h-9 rounded-full bg-slate-200 animate-pulse shrink-0" />}
-                    <div className={`h-16 rounded-2xl animate-pulse bg-slate-200 ${i % 2 === 0 ? "w-64" : "w-80"}`} />
-                    {i % 2 === 0 && <div className="w-9 h-9 rounded-full bg-slate-200 animate-pulse shrink-0" />}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                {messages.map((msg) => (
-                  <ChatBubble key={msg.id} msg={msg} agentType={activeAgent} />
-                ))}
-                {loading && <TypingIndicator agentType={activeAgent} step={currentStep} />}
-              </>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="px-6 py-4 bg-white/80 border-t border-[#bdcabb]/30">
-            <div className="max-w-4xl mx-auto flex items-end gap-3 bg-[#edeeef] px-2 py-2 rounded-2xl shadow-inner border border-[#bdcabb]/20">
-              <button className="p-2.5 text-slate-400 hover:text-[#00682f] transition-colors active:scale-90 shrink-0">
-                <Paperclip size={18} />
-              </button>
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={agent.placeholder}
-                rows={1}
-                disabled={loading}
-                className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-slate-800 py-2.5 px-1 resize-none max-h-32 min-h-10 text-sm font-['Inter'] placeholder:text-slate-400 disabled:opacity-50"
-              />
-              <button className="p-2.5 text-slate-400 hover:text-[#00682f] transition-colors active:scale-90 shrink-0">
-                <Mic size={18} />
-              </button>
-              <button
-                onClick={sendMessage}
-                disabled={!input.trim() || loading}
-                className="bg-[#00843d] text-white p-2.5 rounded-xl shadow hover:bg-[#00682f] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-              >
-                <Send size={18} />
-              </button>
-            </div>
-            <p className="max-w-4xl mx-auto mt-2 px-2 text-[10px] text-slate-400 font-['Work_Sans'] flex items-center gap-1">
-              <AlertCircle size={11} />
-              La IA puede cometer errores. Verifica la información clave. · Enter para enviar, Shift+Enter para nueva línea.
-            </p>
-          </div>
         </main>
       </div>
+
+      {/* ── Bottom Navigation Bar (solo mobile/tablet) ── */}
+      <nav className="lg:hidden bg-white/90 backdrop-blur-xl fixed bottom-0 left-0 w-full z-50 rounded-t-2xl border-t border-slate-100 shadow-[0_-8px_30px_rgba(0,104,47,0.06)] flex justify-around items-center px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        <button
+          onClick={() => setMobileTab("chat")}
+          className={`flex flex-col items-center justify-center px-5 py-1.5 rounded-xl transition-all active:scale-90 ${
+            mobileTab === "chat"
+              ? "text-[#00682f] bg-[#00843D]/5"
+              : "text-slate-400"
+          }`}
+        >
+          <MessageSquare size={20} strokeWidth={mobileTab === "chat" ? 2.5 : 1.5} />
+          <span className="font-['Work_Sans'] text-[10px] font-semibold uppercase tracking-wider mt-0.5">Chat</span>
+        </button>
+        <button
+          onClick={() => setMobileTab("history")}
+          className={`flex flex-col items-center justify-center px-5 py-1.5 rounded-xl transition-all active:scale-90 ${
+            mobileTab === "history"
+              ? "text-[#00682f] bg-[#00843D]/5"
+              : "text-slate-400"
+          }`}
+        >
+          <Clock size={20} strokeWidth={mobileTab === "history" ? 2.5 : 1.5} />
+          <span className="font-['Work_Sans'] text-[10px] font-semibold uppercase tracking-wider mt-0.5">Historial</span>
+        </button>
+        <button
+          onClick={() => setMobileTab("settings")}
+          className={`flex flex-col items-center justify-center px-5 py-1.5 rounded-xl transition-all active:scale-90 ${
+            mobileTab === "settings"
+              ? "text-[#00682f] bg-[#00843D]/5"
+              : "text-slate-400"
+          }`}
+        >
+          <Settings size={20} strokeWidth={mobileTab === "settings" ? 2.5 : 1.5} />
+          <span className="font-['Work_Sans'] text-[10px] font-semibold uppercase tracking-wider mt-0.5">Ajustes</span>
+        </button>
+      </nav>
 
       <SettingsModal
         open={settingsOpen}
