@@ -567,6 +567,8 @@ export default function AgentesPage() {
       return;
     }
 
+    if (marioMode) new Audio("/chieuk-coin-257878.mp3").play().catch(() => {});
+
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: new Date() };
     setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], userMsg] }));
     setInput("");

@@ -89,6 +89,22 @@ TABLAS DISPONIBLES (PostgreSQL, solo lectura):
    - retroalimentacion, seguimiento_compromisos, aspectos_mejora
    - programa, año INT, numero_encuentro, unidad_regional
 
+   EJEMPLOS:
+   -- Promedio de experiencia por año:
+   SELECT "año", AVG(experiencia_general) AS promedio
+   FROM encuestas_estudiantes
+   GROUP BY "año" ORDER BY "año"
+
+   -- Tendencia por semestre:
+   SELECT semestre, "año", AVG(experiencia_general) AS promedio
+   FROM encuestas_estudiantes
+   GROUP BY semestre, "año" ORDER BY "año", semestre
+
+   -- Aspectos de mejora más frecuentes:
+   SELECT aspectos_mejora, COUNT(*) AS total
+   FROM encuestas_estudiantes
+   GROUP BY aspectos_mejora ORDER BY total DESC
+
 3. encuestas_docentes
    - id, unidad_regional, facultad, programa
    - encuentro, año INT, experiencia INT (1-5)
@@ -96,17 +112,40 @@ TABLAS DISPONIBLES (PostgreSQL, solo lectura):
    - convocatoria, organizacion, mecanismos_participacion
    - participacion_comunidad, uso_canales_digitales, aspectos_mejora
 
+   EJEMPLOS:
+   -- Promedio de experiencia docente por año:
+   SELECT "año", AVG(experiencia) AS promedio
+   FROM encuestas_docentes
+   GROUP BY "año" ORDER BY "año"
+
+   -- Por sede:
+   SELECT unidad_regional, AVG(experiencia) AS promedio
+   FROM encuestas_docentes
+   GROUP BY unidad_regional ORDER BY promedio DESC
+
 4. planes_mejoramiento_estudiantes
    - id, categoria, subcategoria, plan_de_mejoramiento, actividad
    - fecha_cumplimiento, evidencias_cumplimiento
    - calificacion_cumplimiento FLOAT, efectividad
    - programa, unidad_regional, facultad, año INT, encuentro, formulado
 
+   EJEMPLOS:
+   -- Calificación promedio de cumplimiento:
+   SELECT categoria, AVG(calificacion_cumplimiento) AS promedio
+   FROM planes_mejoramiento_estudiantes
+   GROUP BY categoria ORDER BY promedio DESC
+
 5. planes_mejoramiento_docentes
    - id, categoria, subcategoria, plan_de_mejoramiento, actividad
    - fecha_cumplimiento, evidencias_cumplimiento
    - calificacion_cumplimiento FLOAT
    - programa, unidad_regional, facultad, año INT, encuentro, formulado, calificacion
+
+   EJEMPLOS:
+   -- Cumplimiento promedio por categoría:
+   SELECT categoria, AVG(calificacion_cumplimiento) AS promedio
+   FROM planes_mejoramiento_docentes
+   GROUP BY categoria ORDER BY promedio DESC
 
 NOTAS SQL:
 - La columna "año" se escribe con comillas dobles: "año"
@@ -223,8 +262,18 @@ function compressQueryResult(rows: Record<string, unknown>[], rowCount: number):
 
 // ── Extrae SQL del texto de la IA — elimina punto y coma final ─────────────────
 function extractSQL(text: string): string | null {
+  // 1. Bloque fenced ```sql ... ``` o ``` ... ```
   const fenced = text.match(/```sql\s*([\s\S]*?)```/i) ?? text.match(/```\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim().replace(/;\s*$/, "");
+
+  // 2. Bloque SELECT multi-línea sin fenced (el modelo no usó backticks)
+  const blockMatch = text.match(/\bSELECT\b([\s\S]*?)(?:;[\s]*$|;[\s]*\n|$)/im);
+  if (blockMatch) {
+    const candidate = ("SELECT" + blockMatch[1]).trim().replace(/;\s*$/, "");
+    if (/\bFROM\b/i.test(candidate)) return candidate;
+  }
+
+  // 3. Fallback: primera línea SELECT
   const line = text.split("\n").find((l) => /^\s*select\s/i.test(l));
   return line?.trim().replace(/;\s*$/, "") ?? null;
 }
@@ -400,11 +449,12 @@ REGLAS DE SEGURIDAD:
 ${DB_SCHEMA}
 
 INSTRUCCIÓN TÉCNICA PARA GENERAR SQL:
-Cuando necesites consultar datos, responde SOLO con el bloque SQL:
+Cuando necesites consultar datos de la BD, responde ÚNICAMENTE con el bloque SQL así:
 \`\`\`sql
 SELECT ...
 \`\`\`
-Sin punto y coma al final. Sin texto antes del SQL. Después de recibir los resultados, analiza y responde en lenguaje natural.`;
+⚠️ CRÍTICO: NO escribas texto antes del bloque SQL. NO expliques lo que vas a hacer. NO digas "necesitaría ejecutar". Responde SOLO el bloque SQL y nada más.
+El sistema ejecutará el SQL automáticamente y te devolverá los resultados para que los analices.`;
 }
 
 function getSoporteSystemPrompt(): string {
