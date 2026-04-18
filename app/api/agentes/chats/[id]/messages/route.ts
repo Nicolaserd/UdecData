@@ -2,16 +2,33 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 const MAX_MESSAGES = 30;
+const MAX_CONTEXT_MESSAGES = 10;
 
 // GET /api/agentes/chats/[id]/messages
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const chatId = parseInt(id);
   if (isNaN(chatId)) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+
+  const rawLimit = req.nextUrl.searchParams.get("limit");
+  const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : null;
+  const limit = parsedLimit && parsedLimit > 0
+    ? Math.min(parsedLimit, MAX_CONTEXT_MESSAGES)
+    : null;
+
+  if (limit) {
+    const messages = await prisma.chatMessage.findMany({
+      where: { chat_id: chatId },
+      orderBy: { created_at: "desc" },
+      take: limit,
+    });
+
+    return NextResponse.json(messages.reverse());
   }
 
   const messages = await prisma.chatMessage.findMany({

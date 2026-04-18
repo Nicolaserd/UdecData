@@ -200,8 +200,8 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
           );
           const semIdx = headers.findIndex((h) => h === "SEMESTRE");
 
-          let anio = anioIdx >= 0 ? parseInt(fields[anioIdx], 10) : parseInt(fields[2], 10);
-          let semestre = semIdx >= 0 ? parseInt(fields[semIdx], 10) : parseInt(fields[3], 10);
+          const anio = anioIdx >= 0 ? parseInt(fields[anioIdx], 10) : parseInt(fields[2], 10);
+          const semestre = semIdx >= 0 ? parseInt(fields[semIdx], 10) : parseInt(fields[3], 10);
 
           if (isNaN(anio) || anio < 2000) continue;
           const periodo = semestre === 1 ? "IPA" : semestre === 2 ? "IIPA" : String(semestre);

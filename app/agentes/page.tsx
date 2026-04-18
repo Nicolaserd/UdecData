@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Send, Mic, Plus, BarChart2, Bot,
-  Paperclip, AlertCircle, Settings, Trash2, MessageSquare,
+  Paperclip, AlertCircle, Settings, Trash2, MessageSquare, Clock,
 } from "lucide-react";
-import SettingsModal from "@/components/agentes/SettingsModal";
+import SettingsModal, { MODELS } from "@/components/agentes/SettingsModal";
 import { NavBar } from "@/components/layout/navbar";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -15,7 +15,8 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  timestamp: Date;
+  timestamp: Date | null;
+  modelTrace?: ModelTraceItem[];
   error?: boolean;
 }
 
@@ -26,6 +27,27 @@ interface SavedChat {
   created_at: string;
   updated_at: string;
 }
+
+interface PersistedChatMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+interface ContextMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+interface ModelTraceItem {
+  providerLabel: string;
+  model: string;
+  label: string;
+  status: "used" | "failed" | "skipped";
+}
+
+const CONTEXT_MESSAGE_LIMIT = 10;
 
 const AGENTS = {
   analista: {
@@ -50,6 +72,7 @@ const STEP_LABELS: Record<string, { label: string; icon: string }> = {
   executing:      { label: "Ejecutando en base de datos...", icon: "⚡" },
   analyzing:      { label: "Analizando resultados...",       icon: "📊" },
   responding:     { label: "Preparando respuesta...",        icon: "✍️" },
+  validating_answer: { label: "Validando respuesta...",      icon: "✓" },
 };
 
 function genId() { return Math.random().toString(36).slice(2); }
@@ -65,7 +88,106 @@ function formatChatTime(dateStr: string) {
 }
 
 function formatMsgTime(date: Date) {
-  return date.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
+  const time = date.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  if (diffDays === 0) return time;
+  if (diffDays === 1) return `Ayer ${time}`;
+  if (diffDays < 7) return `${date.toLocaleDateString("es-CO", { weekday: "short" })} ${time}`;
+  return `${date.toLocaleDateString("es-CO", { day: "2-digit", month: "short" })} ${time}`;
+}
+
+function formatModelTrace(modelTrace?: ModelTraceItem[]) {
+  const byProvider = new Map<string, string[]>();
+
+  for (const item of modelTrace ?? []) {
+    if (item.status === "skipped") continue;
+    const cleanLabel = (item.label || item.model).replace(new RegExp(`^${item.providerLabel}\\s+`, "i"), "");
+    const suffix = item.status === "failed" ? " (fallo)" : "";
+    const providerModels = byProvider.get(item.providerLabel) ?? [];
+    const label = `${cleanLabel}${suffix}`;
+    if (!providerModels.includes(label)) providerModels.push(label);
+    byProvider.set(item.providerLabel, providerModels);
+  }
+
+  return Array.from(byProvider.entries())
+    .map(([provider, models]) => `${provider}: ${models.join(", ")}`)
+    .join(" -> ");
+}
+
+function createGreetingMessage(agent: AgentType, withTimestamp = true): Message {
+  return {
+    id: `greeting-${agent}${withTimestamp ? `-${genId()}` : ""}`,
+    role: "assistant",
+    content: AGENTS[agent].greeting,
+    timestamp: withTimestamp ? new Date() : null,
+  };
+}
+
+function createInitialConversations(): Record<AgentType, Message[]> {
+  return {
+    analista: [createGreetingMessage("analista", false)],
+    soporte: [createGreetingMessage("soporte", false)],
+  };
+}
+
+function toContextMessages(messages: Pick<Message, "role" | "content" | "error">[]): ContextMessage[] {
+  return messages
+    .filter((m) => !m.error)
+    .map((m) => ({ role: m.role, content: m.content }));
+}
+
+function persistedToContextMessages(messages: PersistedChatMessage[]): ContextMessage[] {
+  return messages.map((m) => ({ role: m.role, content: m.content }));
+}
+
+function getRollingSummaryMessages(messages: PersistedChatMessage[]): PersistedChatMessage[] {
+  return messages.slice(-CONTEXT_MESSAGE_LIMIT);
+}
+
+function getSummaryKey(messages: PersistedChatMessage[]): string {
+  if (messages.length === 0) return "";
+  return `${messages.length}:${messages[0].id}:${messages[messages.length - 1].id}`;
+}
+
+function toUiMessages(messages: PersistedChatMessage[]): Message[] {
+  return messages.map((m) => ({
+    id: String(m.id),
+    role: m.role,
+    content: m.content,
+    timestamp: new Date(m.created_at),
+  }));
+}
+
+async function fetchDbMessages(chatId: number, limit?: number): Promise<PersistedChatMessage[]> {
+  const query = limit ? `?limit=${limit}` : "";
+  const res = await fetch(`/api/agentes/chats/${chatId}/messages${query}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+async function requestSummary(
+  agent: AgentType,
+  history: ContextMessage[],
+  customApiKey?: string
+): Promise<string | null> {
+  if (history.length === 0) return "";
+
+  const res = await fetch("/api/agentes/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "",
+      agent,
+      history,
+      summarize: true,
+      ...(customApiKey ? { apiKey: customApiKey } : {}),
+    }),
+  });
+
+  if (!res.ok) return null;
+  const data = await res.json();
+  return typeof data.summary === "string" ? data.summary : null;
 }
 
 // ── Renderiza markdown básico (bloques de código) ──────────────────────────────
@@ -91,11 +213,19 @@ function renderContent(content: string, isError: boolean) {
 // ── Burbuja de mensaje ─────────────────────────────────────────────────────────
 function ChatBubble({ msg, agentType }: { msg: Message; agentType: AgentType }) {
   const agent = AGENTS[agentType];
+  const modelTraceText = formatModelTrace(msg.modelTrace);
   if (msg.role === "user") {
     return (
       <div className="flex items-start gap-3 justify-end max-w-4xl ml-auto">
-        <div className="bg-[#00843d] text-white px-5 py-4 rounded-2xl rounded-tr-none shadow-md max-w-xl">
-          <p className="leading-relaxed text-sm font-['Inter'] whitespace-pre-wrap">{msg.content}</p>
+        <div className="flex flex-col items-end gap-1">
+          <div className="bg-[#00843d] text-white px-5 py-4 rounded-2xl rounded-tr-none shadow-md max-w-xl">
+            <p className="leading-relaxed text-sm font-['Inter'] whitespace-pre-wrap">{msg.content}</p>
+          </div>
+          {msg.timestamp && (
+            <span className="text-[10px] text-slate-400 font-['Work_Sans'] pr-1">
+              {formatMsgTime(msg.timestamp)}
+            </span>
+          )}
         </div>
         <div className="w-9 h-9 rounded-full bg-emerald-100 shrink-0 flex items-center justify-center border-2 border-white shadow mt-1">
           <span className="text-emerald-700 text-xs font-bold font-['Manrope']">Tú</span>
@@ -116,7 +246,20 @@ function ChatBubble({ msg, agentType }: { msg: Message; agentType: AgentType }) 
           </div>
         )}
         <div>{renderContent(msg.content, !!msg.error)}</div>
-        <span className="text-[10px] text-slate-400 mt-2 block font-['Work_Sans']">{formatMsgTime(msg.timestamp)}</span>
+        {(modelTraceText || msg.timestamp) && (
+          <div className="mt-2 flex flex-col items-start gap-0.5 font-['Work_Sans']">
+            {modelTraceText && (
+              <span className="text-[10px] leading-snug text-slate-500">
+                Modelos: {modelTraceText}
+              </span>
+            )}
+            {msg.timestamp && (
+              <span className="text-[10px] text-slate-400">
+                {formatMsgTime(msg.timestamp)}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -151,17 +294,16 @@ function TypingIndicator({ agentType, step }: { agentType: AgentType; step: stri
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function AgentesPage() {
   const [activeAgent, setActiveAgent] = useState<AgentType>("analista");
-  const [conversations, setConversations] = useState<Record<AgentType, Message[]>>({
-    analista: [{ id: genId(), role: "assistant", content: AGENTS.analista.greeting, timestamp: new Date() }],
-    soporte:  [{ id: genId(), role: "assistant", content: AGENTS.soporte.greeting,  timestamp: new Date() }],
-  });
+  const [conversations, setConversations] = useState<Record<AgentType, Message[]>>(createInitialConversations);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile");
+  const [selectedModel, setSelectedModel] = useState("groq:llama-3.3-70b-versatile");
   const [customApiKey, setCustomApiKey] = useState("");
+  const [autoSwitch, setAutoSwitch] = useState(true);
   const [summaries, setSummaries] = useState<Record<AgentType, string>>({ analista: "", soporte: "" });
+  const [summaryKeys, setSummaryKeys] = useState<Record<AgentType, string>>({ analista: "", soporte: "" });
 
   // ── Estado del historial guardado ──────────────────────────────────────────
   const [savedChats, setSavedChats] = useState<Record<AgentType, SavedChat[]>>({ analista: [], soporte: [] });
@@ -172,11 +314,14 @@ export default function AgentesPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   const activeChatId = activeChatIds[activeAgent];
+  const setAgentActiveChatId = (agent: AgentType, id: number | null) =>
+    setActiveChatIds((prev) => ({ ...prev, [agent]: id }));
   const setActiveChatId = (id: number | null) =>
-    setActiveChatIds((prev) => ({ ...prev, [activeAgent]: id }));
+    setAgentActiveChatId(activeAgent, id);
 
   const chatEndRef  = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const initializedChatsRef = useRef<Record<AgentType, boolean>>({ analista: false, soporte: false });
   const messages = conversations[activeAgent];
 
   useEffect(() => {
@@ -185,13 +330,45 @@ export default function AgentesPage() {
 
   // Cargar historial de chats al montar y al cambiar de agente
   useEffect(() => {
+    let cancelled = false;
     setLoadingChats(true);
     fetch(`/api/agentes/chats?agent=${activeAgent}`)
       .then((r) => r.json())
-      .then((data: SavedChat[]) => setSavedChats((prev) => ({ ...prev, [activeAgent]: data })))
+      .then(async (data: SavedChat[]) => {
+        if (cancelled) return;
+        setSavedChats((prev) => ({ ...prev, [activeAgent]: data }));
+
+        const latestChat = data[0];
+        if (latestChat && !initializedChatsRef.current[activeAgent]) {
+          initializedChatsRef.current[activeAgent] = true;
+          setActiveChatIds((prev) => ({ ...prev, [activeAgent]: latestChat.id }));
+          setLoadingMessages(true);
+          try {
+            const dbMsgs = await fetchDbMessages(latestChat.id);
+            if (cancelled) return;
+            const msgs = toUiMessages(dbMsgs);
+            setConversations((prev) => ({ ...prev, [activeAgent]: msgs.length ? msgs : prev[activeAgent] }));
+            const summarySource = getRollingSummaryMessages(dbMsgs);
+            const nextSummaryKey = getSummaryKey(summarySource);
+            requestSummary(activeAgent, persistedToContextMessages(summarySource), customApiKey)
+              .then((summary) => {
+                if (!cancelled && summary !== null) {
+                  setSummaries((prev) => ({ ...prev, [activeAgent]: summary }));
+                  setSummaryKeys((prev) => ({ ...prev, [activeAgent]: nextSummaryKey }));
+                }
+              })
+              .catch(() => {});
+          } finally {
+            if (!cancelled) setLoadingMessages(false);
+          }
+        }
+      })
       .catch(() => {})
-      .finally(() => setLoadingChats(false));
-  }, [activeAgent]);
+      .finally(() => {
+        if (!cancelled) setLoadingChats(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeAgent, customApiKey]);
 
   // ── Guardar mensaje en BD — espera confirmación antes de continuar ──────────
   async function persistMessage(chatId: number, role: "user" | "assistant", content: string): Promise<boolean> {
@@ -226,23 +403,51 @@ export default function AgentesPage() {
     }
   }
 
+  async function refreshSummaryFromDb(agent: AgentType, chatId: number, dbMessages?: PersistedChatMessage[]) {
+    const messagesFromDb = dbMessages ?? await fetchDbMessages(chatId);
+    const summarySource = getRollingSummaryMessages(messagesFromDb);
+    const nextSummaryKey = getSummaryKey(summarySource);
+    const summary = await requestSummary(agent, persistedToContextMessages(summarySource), customApiKey);
+    if (summary !== null) {
+      setSummaries((prev) => ({ ...prev, [agent]: summary }));
+      setSummaryKeys((prev) => ({ ...prev, [agent]: nextSummaryKey }));
+    }
+  }
+
+  async function getSummaryForRequest(agent: AgentType, dbMessages: PersistedChatMessage[]): Promise<string> {
+    const summarySource = getRollingSummaryMessages(dbMessages);
+    const nextSummaryKey = getSummaryKey(summarySource);
+
+    if (!nextSummaryKey) {
+      setSummaries((prev) => ({ ...prev, [agent]: "" }));
+      setSummaryKeys((prev) => ({ ...prev, [agent]: "" }));
+      return "";
+    }
+
+    if (summaryKeys[agent] === nextSummaryKey && summaries[agent]) {
+      return summaries[agent];
+    }
+
+    const summary = await requestSummary(agent, persistedToContextMessages(summarySource), customApiKey);
+    if (summary !== null) {
+      setSummaries((prev) => ({ ...prev, [agent]: summary }));
+      setSummaryKeys((prev) => ({ ...prev, [agent]: nextSummaryKey }));
+      return summary;
+    }
+
+    return summaries[agent] || "";
+  }
+
   // ── Cargar conversación guardada — espera respuesta BD antes de mostrar ─────
   async function loadChat(chat: SavedChat) {
     if (activeChatId === chat.id) return;
     setActiveChatId(chat.id);
     setLoadingMessages(true);
     try {
-      const res = await fetch(`/api/agentes/chats/${chat.id}/messages`);
-      if (!res.ok) return;
-      const dbMsgs: { id: number; role: string; content: string; created_at: string }[] = await res.json();
-      const msgs: Message[] = dbMsgs.map((m) => ({
-        id: String(m.id),
-        role: m.role as "user" | "assistant",
-        content: m.content,
-        timestamp: new Date(m.created_at),
-      }));
+      const dbMsgs = await fetchDbMessages(chat.id);
+      const msgs = toUiMessages(dbMsgs);
       setConversations((prev) => ({ ...prev, [activeAgent]: msgs.length ? msgs : prev[activeAgent] }));
-      setSummaries((prev) => ({ ...prev, [activeAgent]: "" }));
+      refreshSummaryFromDb(activeAgent, chat.id, dbMsgs).catch(() => {});
     } catch { /* ignorar */ }
     finally { setLoadingMessages(false); }
   }
@@ -261,8 +466,10 @@ export default function AgentesPage() {
         setActiveChatId(null);
         setConversations((prev) => ({
           ...prev,
-          [activeAgent]: [{ id: genId(), role: "assistant", content: AGENTS[activeAgent].greeting, timestamp: new Date() }],
+          [activeAgent]: [createGreetingMessage(activeAgent)],
         }));
+        setSummaries((prev) => ({ ...prev, [activeAgent]: "" }));
+        setSummaryKeys((prev) => ({ ...prev, [activeAgent]: "" }));
       }
       setDeleteConfirmId(null);
     } finally {
@@ -275,31 +482,14 @@ export default function AgentesPage() {
     setActiveChatId(null);
     setConversations((prev) => ({
       ...prev,
-      [activeAgent]: [{ id: genId(), role: "assistant", content: AGENTS[activeAgent].greeting, timestamp: new Date() }],
+      [activeAgent]: [createGreetingMessage(activeAgent)],
     }));
     setSummaries((prev) => ({ ...prev, [activeAgent]: "" }));
-  }
-
-  // ── Auto-resumen cada 10 mensajes ──────────────────────────────────────────
-  async function autoSummarize(agent: AgentType, msgs: Message[]) {
-    const history = msgs.filter((m) => !m.error).map((m) => ({ role: m.role, content: m.content }));
-    try {
-      const res = await fetch("/api/agentes/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "", agent, history, summarize: true, ...(customApiKey ? { apiKey: customApiKey } : {}) }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.summary) {
-        setSummaries((prev) => ({ ...prev, [agent]: data.summary }));
-        setConversations((prev) => ({ ...prev, [agent]: prev[agent].slice(-4) }));
-      }
-    } catch { /* ignorar */ }
+    setSummaryKeys((prev) => ({ ...prev, [activeAgent]: "" }));
   }
 
   // ── Enviar mensaje ─────────────────────────────────────────────────────────
-  const sendMessage = useCallback(async () => {
+  async function sendMessage() {
     const text = input.trim();
     if (!text || loading) return;
 
@@ -309,21 +499,22 @@ export default function AgentesPage() {
     setLoading(true);
     setCurrentStep(null);
 
-    const currentMsgs = [...conversations[activeAgent], userMsg];
-    const userCount = currentMsgs.filter((m) => m.role === "user").length;
-    if (userCount > 0 && userCount % 10 === 0) autoSummarize(activeAgent, currentMsgs);
-
     // Crear chat en BD si es el primer mensaje
     let chatId = activeChatId;
     if (!chatId) {
       chatId = await createChat(text.slice(0, 60));
       if (chatId) setActiveChatId(chatId);
     }
-    if (chatId) await persistMessage(chatId, "user", text);
+    let summaryForRequest = summaries[activeAgent] || "";
+    let history = toContextMessages(conversations[activeAgent]).slice(-CONTEXT_MESSAGE_LIMIT);
 
-    const history = conversations[activeAgent]
-      .filter((m) => !m.error)
-      .map((m) => ({ role: m.role, content: m.content }));
+    if (chatId) {
+      const userSaved = await persistMessage(chatId, "user", text);
+      const dbMessages = userSaved ? await fetchDbMessages(chatId) : await fetchDbMessages(chatId, CONTEXT_MESSAGE_LIMIT);
+      const previousMessages = userSaved ? dbMessages.slice(0, -1) : dbMessages;
+      history = persistedToContextMessages(previousMessages.slice(-CONTEXT_MESSAGE_LIMIT));
+      summaryForRequest = await getSummaryForRequest(activeAgent, dbMessages);
+    }
 
     try {
       const res = await fetch("/api/agentes/chat", {
@@ -333,8 +524,9 @@ export default function AgentesPage() {
           message: text,
           agent: activeAgent,
           history,
-          summary: summaries[activeAgent] || undefined,
+          summary: summaryForRequest || undefined,
           model: selectedModel,
+          autoSwitch,
           ...(customApiKey ? { apiKey: customApiKey } : {}),
         }),
       });
@@ -367,9 +559,20 @@ export default function AgentesPage() {
               setCurrentStep(event.step);
             } else if (event.done) {
               setCurrentStep(null);
-              const assistantMsg: Message = { id: genId(), role: "assistant", content: event.reply, timestamp: new Date() };
+              const assistantMsg: Message = {
+                id: genId(),
+                role: "assistant",
+                content: event.reply,
+                timestamp: new Date(),
+                modelTrace: Array.isArray(event.modelTrace) ? event.modelTrace : undefined,
+              };
               // Esperar a que BD confirme antes de actualizar sidebar
-              if (chatId) await persistMessage(chatId, "assistant", event.reply);
+              if (chatId) {
+                const saved = await persistMessage(chatId, "assistant", event.reply);
+                if (saved) {
+                  refreshSummaryFromDb(activeAgent, chatId).catch(() => {});
+                }
+              }
               setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], assistantMsg] }));
               setSavedChats((prev) => ({
                 ...prev,
@@ -396,7 +599,7 @@ export default function AgentesPage() {
       setCurrentStep(null);
       setLoading(false);
     }
-  }, [input, loading, activeAgent, conversations, selectedModel, customApiKey, summaries, activeChatId]);
+  }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -404,6 +607,7 @@ export default function AgentesPage() {
 
   const agent = AGENTS[activeAgent];
   const agentChats = savedChats[activeAgent];
+  const selectedModelLabel = MODELS.find((m) => m.id === selectedModel || m.model === selectedModel)?.label ?? selectedModel;
 
   return (
     <div className="bg-[#f8f9fa] font-['Inter'] text-slate-800 min-h-screen flex flex-col overflow-hidden">
@@ -519,7 +723,8 @@ export default function AgentesPage() {
                             <Trash2 size={12} />
                           </button>
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-['Work_Sans']">
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-['Work_Sans'] flex items-center gap-1">
+                          <Clock size={9} />
                           {formatChatTime(chat.updated_at)}
                         </p>
                       </div>
@@ -562,7 +767,7 @@ export default function AgentesPage() {
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-xs text-slate-500 font-['Work_Sans']">En línea ahora</span>
-                  <span className="text-xs text-slate-400 font-['Work_Sans']">· {selectedModel}</span>
+                  <span className="text-xs text-slate-400 font-['Work_Sans']">· {selectedModelLabel}</span>
                 </div>
               </div>
             </div>
@@ -633,6 +838,8 @@ export default function AgentesPage() {
         onModelChange={setSelectedModel}
         customApiKey={customApiKey}
         onApiKeyChange={setCustomApiKey}
+        autoSwitch={autoSwitch}
+        onAutoSwitchChange={setAutoSwitch}
       />
     </div>
   );

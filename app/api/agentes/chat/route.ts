@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool, PoolClient } from "pg";
+import {
+  type AgentType,
+  type AiModelOption,
+  type AiProvider,
+  buildFallbackQueue,
+  findAiModel,
+  prioritizeModel,
+  PROVIDER_LABELS,
+} from "@/lib/ai/model-options";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
-type AgentType = "analista" | "soporte";
-
 interface ChatMessage {
-  role: "user" | "assistant";
+  role: "system" | "user" | "assistant";
   content: string;
 }
 
@@ -17,19 +24,10 @@ interface ChatRequest {
   model?: string;
   apiKey?: string;
   summarize?: boolean;
+  autoSwitch?: boolean;
 }
 
-// ── Modelos y cadenas de fallback ─────────────────────────────────────────────
-const ALLOWED_MODELS = [
-  "llama-3.3-70b-versatile",
-  "mixtral-8x7b-32768",
-  "llama-3.1-8b-instant",
-];
-
-const FALLBACK_CHAINS: Record<string, string[]> = {
-  analista: ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"],
-  soporte:  ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "llama-3.3-70b-versatile"],
-};
+const MAX_CONTEXT_MESSAGES = 10;
 
 // ── Esquema de la BD (lo ve la IA para generar SQL correcto) ───────────────────
 const DB_SCHEMA = `
@@ -229,24 +227,132 @@ function extractSQL(text: string): string | null {
   return line?.trim().replace(/;\s*$/, "") ?? null;
 }
 
-// ── Llamada simple a Groq ──────────────────────────────────────────────────────
-async function callGroq(
-  apiKey: string,
+// ── Llamada a proveedores IA ───────────────────────────────────────────────────
+interface ModelCallResult {
+  reply: string;
+  usage: Record<string, number>;
+  model: string;
+  modelId: string;
+  provider: AiProvider;
+  providerLabel: string;
+  modelTrace: ModelTraceItem[];
+}
+
+interface ModelTraceItem {
+  provider: AiProvider;
+  providerLabel: string;
+  model: string;
+  modelId: string;
+  label: string;
+  status: "used" | "failed" | "skipped";
+}
+
+function getSystemPrompt(agent: AgentType): string {
+  return agent === "analista" ? getAnalistaSystemPrompt() : getSoporteSystemPrompt();
+}
+
+function resolveProviderApiKey(provider: AiProvider, customApiKey?: string): string | undefined {
+  const trimmed = customApiKey?.trim();
+  if (provider === "groq") {
+    if (trimmed && !trimmed.startsWith("csk-")) return trimmed;
+    return process.env.GROQ_API_KEY;
+  }
+  if (trimmed?.startsWith("csk-")) return trimmed;
+  return process.env.CEREBRAS_API_KEY;
+}
+
+function getProviderEndpoint(provider: AiProvider): string {
+  return provider === "groq"
+    ? "https://api.groq.com/openai/v1/chat/completions"
+    : "https://api.cerebras.ai/v1/chat/completions";
+}
+
+function buildProviderBody(
+  provider: AiProvider,
   model: string,
   messages: { role: string; content: string }[],
-  maxTokens = 512
-): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  maxTokens: number,
+  temperature: number
+) {
+  const tokenParam = provider === "cerebras"
+    ? { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens };
+
+  return {
+    model,
+    messages,
+    temperature,
+    ...tokenParam,
+  };
+}
+
+function compactProviderError(provider: AiProvider, model: string, status: number, raw: string): string {
+  let detail = raw;
+  try {
+    const parsed = JSON.parse(raw);
+    detail = parsed.error?.code || parsed.error?.message || raw;
+  } catch {
+    detail = raw.slice(0, 180);
+  }
+  return `${PROVIDER_LABELS[provider]} ${status} (${model}): ${detail}`;
+}
+
+async function callModelOnce(
+  apiKey: string,
+  candidate: AiModelOption,
+  messages: { role: string; content: string }[],
+  maxTokens = 1024,
+  temperature = 0.7
+): Promise<ModelCallResult> {
+  const res = await fetch(getProviderEndpoint(candidate.provider), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.2 }),
+    body: JSON.stringify(buildProviderBody(candidate.provider, candidate.model, messages, maxTokens, temperature)),
   });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Groq ${res.status}: ${err}`);
+    throw new Error(compactProviderError(candidate.provider, candidate.model, res.status, err));
   }
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "";
+  const reply = data.choices?.[0]?.message?.content ?? "";
+  if (!reply.trim()) {
+    throw new Error(`${PROVIDER_LABELS[candidate.provider]} devolvio una respuesta vacia (${candidate.model})`);
+  }
+  return {
+    reply,
+    usage: data.usage ?? {},
+    model: candidate.model,
+    modelId: candidate.id,
+    provider: candidate.provider,
+    providerLabel: PROVIDER_LABELS[candidate.provider],
+    modelTrace: [toModelTraceItem(candidate, "used")],
+  };
+}
+
+function toModelTraceItem(candidate: AiModelOption, status: ModelTraceItem["status"]): ModelTraceItem {
+  return {
+    provider: candidate.provider,
+    providerLabel: PROVIDER_LABELS[candidate.provider],
+    model: candidate.model,
+    modelId: candidate.id,
+    label: candidate.label,
+    status,
+  };
+}
+
+function compactModelTrace(...traces: ModelTraceItem[][]): ModelTraceItem[] {
+  const seen = new Set<string>();
+  const compacted: ModelTraceItem[] = [];
+
+  for (const item of traces.flat()) {
+    if (item.status === "skipped") continue;
+    const key = `${item.provider}:${item.model}:${item.status}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compacted.push(item);
+  }
+
+  return compacted;
 }
 
 // ── System prompts ─────────────────────────────────────────────────────────────
@@ -272,7 +378,9 @@ REGLAS DE COMUNICACIÓN (MUY IMPORTANTE):
 - Si hay pocos datos o ninguno, dilo claramente y sugiere cómo reformular la pregunta.
 
 REGLAS DE SEGURIDAD:
-- SOLO consultas SELECT. NUNCA INSERT, UPDATE, DELETE, DROP, ALTER.
+- SOLO consultas SELECT. NUNCA INSERT, UPDATE, DELETE, DROP, ALTER ni ninguna operación de escritura.
+- NUNCA consultes Internet ni uses conocimiento externo para fabricar cifras. Toda respuesta con datos debe provenir exclusivamente de la base de datos institucional.
+- Si un dato no está en la base de datos, dilo claramente. No inventes ni estimes cifras.
 - No reveles contraseñas, URLs de conexión ni claves API.
 - Responde siempre en español.
 
@@ -298,8 +406,11 @@ SERVICIOS DEL PORTAL:
 6. Agentes IA: asistentes inteligentes para análisis y soporte.
 
 REGLAS:
+- Usa el resumen y el historial de esta conversacion para responder datos que el usuario ya dio.
+- Si el usuario dice su nombre, programa, sede u otra preferencia y luego pregunta por eso, respondelo desde el contexto.
 - No reveles información sensible: contraseñas, IDs, URLs de BD, claves API.
 - No proporciones datos específicos de la BD (eso es tarea del Analista).
+- NUNCA consultes Internet ni fuentes externas. Responde solo con lo que sabes del portal y el contexto de la conversación.
 - Orienta al usuario sobre cómo usar las funcionalidades.
 - Responde siempre en español, de forma clara y amable.`;
 }
@@ -322,60 +433,93 @@ function friendlyError(raw: string): string {
   if (lower.includes("database") || lower.includes("postgresql") || lower.includes("connection")) {
     return "No fue posible conectar con la base de datos en este momento. Intenta de nuevo en unos segundos.";
   }
+  if (lower.includes("no hay api key") || lower.includes("api key configurada")) {
+    return "No hay una API Key configurada para Groq o Cerebras. Configura GROQ_API_KEY o CEREBRAS_API_KEY en el servidor.";
+  }
   return "Ocurrió un problema al procesar tu consulta. Intenta reformular la pregunta o cambia el modelo en **Configuración**.";
 }
 
-// ── Llamada a Groq con fallback por 429 ───────────────────────────────────────
-async function callGroqWithFallback(
-  apiKey: string,
-  modelQueue: string[],
+async function callModelWithFallback(
+  customApiKey: string | undefined,
+  modelQueue: AiModelOption[],
   messages: { role: string; content: string }[],
-  maxTokens = 1024
-): Promise<{ reply: string; usage: Record<string, number>; model: string }> {
-  let lastError = "";
-  for (const currentModel of modelQueue) {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: currentModel, messages, max_tokens: maxTokens, temperature: 0.7 }),
-    });
+  maxTokens = 1024,
+  temperature = 0.7
+): Promise<ModelCallResult> {
+  const errors: string[] = [];
+  const trace: ModelTraceItem[] = [];
 
-    // 429 = rate limit, 413 = request too large, 400 model deprecado → siguiente modelo
-    if (res.status === 429 || res.status === 413) {
-      lastError = `${currentModel} (${res.status})`;
+  for (const candidate of modelQueue) {
+    const apiKey = resolveProviderApiKey(candidate.provider, customApiKey);
+    if (!apiKey) {
+      trace.push(toModelTraceItem(candidate, "skipped"));
+      errors.push(`No hay API Key configurada para ${PROVIDER_LABELS[candidate.provider]}`);
       continue;
     }
-    if (res.status === 400) {
-      const errText = await res.text();
-      try {
-        const parsed = JSON.parse(errText);
-        if (parsed.error?.code === "model_decommissioned") {
-          lastError = `${currentModel} (deprecado)`;
-          continue;
-        }
-      } catch { /* ignorar */ }
-      throw new Error(`Groq 400 (${currentModel}): ${errText}`);
-    }
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Groq ${res.status} (${currentModel}): ${err}`);
-    }
 
-    const data = await res.json();
-    return {
-      reply: data.choices?.[0]?.message?.content ?? "",
-      usage: data.usage ?? {},
-      model: currentModel,
-    };
+    try {
+      const result = await callModelOnce(apiKey, candidate, messages, maxTokens, temperature);
+      return {
+        ...result,
+        modelTrace: compactModelTrace(trace, result.modelTrace),
+      };
+    } catch (error) {
+      trace.push(toModelTraceItem(candidate, "failed"));
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
   }
-  throw new Error(`Todos los modelos alcanzaron el límite (último: ${lastError}). Cambia la API Key en Configuración.`);
+
+  throw new Error(errors.join(" | ") || "No hay modelos disponibles para responder");
 }
 
-// ── POST Handler ───────────────────────────────────────────────────────────────
+async function refineAnswer(
+  agent: AgentType,
+  question: string,
+  draft: ModelCallResult,
+  baseQueue: AiModelOption[],
+  customApiKey?: string,
+  contextMessages: ChatMessage[] = []
+): Promise<ModelCallResult> {
+  const refineQueue = prioritizeModel(baseQueue, draft.modelId);
+  try {
+    const refined = await callModelWithFallback(
+      customApiKey,
+      refineQueue,
+      [
+        {
+          role: "system",
+          content: `${getSystemPrompt(agent)}
+
+VALIDACION FINAL:
+- Revisa si el borrador responde la pregunta del usuario.
+- Usa el resumen y el historial de conversacion proporcionados antes de decidir que falta informacion.
+- Si el usuario pregunta por un dato que dio antes en esta misma conversacion, usalo.
+- Si responde, mejora claridad y conserva el estilo del agente.
+- Si no responde, dilo de forma honesta y explica que dato falta o como reformular.
+- No inventes datos. No incluyas SQL. No menciones nombres tecnicos de tablas o columnas.`,
+        },
+        ...contextMessages,
+        {
+          role: "user",
+          content: `Pregunta original:\n${question}\n\nBorrador de respuesta:\n${draft.reply}\n\nDevuelve solo la respuesta final en espanol.`,
+        },
+      ],
+      900,
+      0.2
+    );
+    return {
+      ...refined,
+      modelTrace: compactModelTrace(draft.modelTrace, refined.modelTrace),
+    };
+  } catch {
+    return draft;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { message, agent, history = [], summary, model, apiKey, summarize } = body;
+    const { message, agent, history = [], summary, model, apiKey, summarize, autoSwitch = true } = body;
 
     if (!summarize && (!message || typeof message !== "string")) {
       return NextResponse.json({ error: "Mensaje inválido" }, { status: 400 });
@@ -391,32 +535,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Mensaje contiene operaciones no permitidas" }, { status: 400 });
     }
 
-    const groqApiKey = process.env.GROQ_API_KEY || apiKey;
-    if (!groqApiKey) {
-      return NextResponse.json({ error: "API Key de Groq no configurada" }, { status: 500 });
-    }
+    const selectedModelOption = findAiModel(model);
+    const modelQueue = autoSwitch
+      ? buildFallbackQueue(agent, model)
+      : selectedModelOption
+        ? [selectedModelOption]
+        : buildFallbackQueue(agent, model);
 
     // ── Modo resumen — respuesta JSON normal (no streaming) ───────────────────
     if (summarize) {
       const lines = history
         .map((m) => `${m.role === "user" ? "Usuario" : "Asistente"}: ${m.content}`)
         .join("\n");
-      const summaryText = await callGroq(groqApiKey, "llama-3.1-8b-instant", [
-        { role: "system", content: "Resume conversaciones de forma concisa en 3-5 oraciones en español." },
-        { role: "user", content: `Resume esta conversación:\n\n${lines}` },
-      ]);
-      return NextResponse.json({ summary: summaryText });
+      const summary = await callModelWithFallback(
+        apiKey,
+        buildFallbackQueue(agent, "groq:llama-3.1-8b-instant"),
+        [
+          {
+            role: "system",
+            content: [
+              "Resume la ventana de contexto reciente de una conversacion en espanol.",
+              "La ventana contiene como maximo los 10 mensajes mas nuevos.",
+              "Prioriza con mas fuerza los mensajes mas recientes sobre los antiguos.",
+              "Conserva datos, decisiones, preferencias, objetivos y restricciones utiles para continuar.",
+              "Devuelve 3-6 oraciones concisas.",
+            ].join(" "),
+          },
+          { role: "user", content: `Resume estos mensajes recientes, dando prioridad a los ultimos:\n\n${lines}` },
+        ],
+        512,
+        0.2
+      );
+      return NextResponse.json({ summary: summary.reply, model: summary.model, provider: summary.provider });
     }
 
     // ── Cola de modelos ───────────────────────────────────────────────────────
-    const chain = FALLBACK_CHAINS[agent];
-    const preferredModel = ALLOWED_MODELS.includes(model ?? "") ? model! : chain[0];
-    const modelQueue = [preferredModel, ...chain.filter((m) => m !== preferredModel)];
 
-    // ── Contexto de historial — máximo 3 mensajes para reducir tokens ─────────
-    const recentHistory = history.slice(-3);
+    // Contexto de historial: maximo 10 mensajes previos desde BD.
+    const recentHistory = history
+      .filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string")
+      .slice(-MAX_CONTEXT_MESSAGES);
     const contextMessages: ChatMessage[] = summary
-      ? [{ role: "assistant", content: `[Resumen anterior]: ${summary}` }, ...recentHistory]
+      ? [{ role: "system", content: `Resumen de contexto reciente de esta conversacion: ${summary}` }, ...recentHistory]
       : recentHistory;
 
     // ── Streaming NDJSON — emite eventos de progreso ──────────────────────────
@@ -430,8 +590,8 @@ export async function POST(request: NextRequest) {
         try {
           // ── Soporte: respuesta directa ──────────────────────────────────────
           if (agent === "soporte") {
-            const { reply, usage, model: usedModel } = await callGroqWithFallback(
-              groqApiKey,
+            const draft = await callModelWithFallback(
+              apiKey,
               modelQueue,
               [
                 { role: "system", content: getSoporteSystemPrompt() },
@@ -439,7 +599,18 @@ export async function POST(request: NextRequest) {
                 { role: "user", content: message },
               ]
             );
-            send({ done: true, reply, usage, model: usedModel });
+            send({ step: "validating_answer" });
+            const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages);
+            send({
+              done: true,
+              reply: finalAnswer.reply,
+              usage: finalAnswer.usage,
+              model: finalAnswer.model,
+              modelId: finalAnswer.modelId,
+              provider: finalAnswer.provider,
+              providerLabel: finalAnswer.providerLabel,
+              modelTrace: finalAnswer.modelTrace,
+            });
             return;
           }
 
@@ -447,8 +618,8 @@ export async function POST(request: NextRequest) {
 
           // Paso 1 — IA genera SQL o responde directamente
           send({ step: "generating_sql" });
-          const step1 = await callGroqWithFallback(
-            groqApiKey,
+          const step1 = await callModelWithFallback(
+            apiKey,
             modelQueue,
             [
               { role: "system", content: getAnalistaSystemPrompt() },
@@ -462,7 +633,18 @@ export async function POST(request: NextRequest) {
 
           // Sin SQL → la IA ya respondió sin necesitar la BD
           if (!sqlCandidate) {
-            send({ done: true, reply: step1.reply, usage: step1.usage, model: step1.model });
+            send({ step: "validating_answer" });
+            const finalAnswer = await refineAnswer(agent, message, step1, modelQueue, apiKey, contextMessages);
+            send({
+              done: true,
+              reply: finalAnswer.reply,
+              usage: finalAnswer.usage,
+              model: finalAnswer.model,
+              modelId: finalAnswer.modelId,
+              provider: finalAnswer.provider,
+              providerLabel: finalAnswer.providerLabel,
+              modelTrace: finalAnswer.modelTrace,
+            });
             return;
           }
 
@@ -473,8 +655,8 @@ export async function POST(request: NextRequest) {
           if (!validation.ok) {
             send({ step: "responding" });
             const fallbackMsg = `[SISTEMA: La consulta SQL fue bloqueada por seguridad (${validation.reason}). Responde con los datos que conozcas del esquema o indica que no tienes esa información.]`;
-            const { reply, usage, model: usedModel } = await callGroqWithFallback(
-              groqApiKey,
+            const draft = await callModelWithFallback(
+              apiKey,
               modelQueue,
               [
                 { role: "system", content: getAnalistaSystemPrompt() },
@@ -483,7 +665,19 @@ export async function POST(request: NextRequest) {
                 { role: "assistant", content: fallbackMsg },
               ]
             );
-            send({ done: true, reply, usage, model: usedModel, sqlBlocked: true });
+            send({ step: "validating_answer" });
+            const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages);
+            send({
+              done: true,
+              reply: finalAnswer.reply,
+              usage: finalAnswer.usage,
+              model: finalAnswer.model,
+              modelId: finalAnswer.modelId,
+              provider: finalAnswer.provider,
+              providerLabel: finalAnswer.providerLabel,
+              modelTrace: compactModelTrace(step1.modelTrace, finalAnswer.modelTrace),
+              sqlBlocked: true,
+            });
             return;
           }
 
@@ -503,8 +697,8 @@ export async function POST(request: NextRequest) {
           // Paso 4 — IA analiza resultados y genera respuesta final
           // Sin historial de conversación aquí: solo pregunta + SQL + resultados
           send({ step: "analyzing" });
-          const { reply, usage, model: usedModel } = await callGroqWithFallback(
-            groqApiKey,
+          const draft = await callModelWithFallback(
+            apiKey,
             modelQueue,
             [
               { role: "system", content: getAnalistaSystemPrompt() },
@@ -519,7 +713,20 @@ export async function POST(request: NextRequest) {
             ]
           );
 
-          send({ done: true, reply, usage, model: usedModel, executedSQL: sqlCandidate, queryError });
+          send({ step: "validating_answer" });
+          const finalAnswer = await refineAnswer(agent, message, draft, modelQueue, apiKey, contextMessages);
+          send({
+            done: true,
+            reply: finalAnswer.reply,
+            usage: finalAnswer.usage,
+            model: finalAnswer.model,
+            modelId: finalAnswer.modelId,
+            provider: finalAnswer.provider,
+            providerLabel: finalAnswer.providerLabel,
+            modelTrace: compactModelTrace(step1.modelTrace, finalAnswer.modelTrace),
+            executedSQL: sqlCandidate,
+            queryError,
+          });
 
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Error desconocido";
