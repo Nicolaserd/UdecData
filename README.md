@@ -1,157 +1,403 @@
-# UdecData - Automatizar Reportes para Boletin
+# UdecData - Portal de Inteligencia Academica
 
-Aplicacion web para la Universidad de Cundinamarca que automatiza la generacion de informes consolidados de estudiantes. Transforma archivos fuente individuales (CSV o Excel) en un consolidado agregado ESTUDIANTES.xlsx con conteos por categoria, region, programa, ano y periodo.
+Aplicacion web para la Universidad de Cundinamarca que centraliza reportes
+academicos, analitica institucional, pronostico de poblacion estudiantil,
+gestion de Encuentros Dialogicos y agentes de IA para consulta y soporte.
 
-## Funcionalidades
+El proyecto esta construido con Next.js App Router y usa PostgreSQL/Supabase
+como fuente principal de datos. El modulo de agentes de IA puede consultar la
+base de datos en modo solo lectura para responder preguntas institucionales con
+datos reales.
 
-### Carga y procesamiento de archivos
-- Carga de 5 archivos requeridos: **Matriculados**, **Admitidos**, **Primiparos**, **Inscritos** y **Graduados**
-- Acepta formatos **CSV** (.csv) y **Excel** (.xlsx, .xls) en todos los campos
-- Deteccion automatica del formato del archivo
-- Archivo historico opcional (ESTUDIANTES.xlsx) para consolidar con datos previos
+## Modulos principales
 
-### Normalizacion inteligente (Fuzzy Matching)
-- Normalizacion generica de nombres de programas academicos usando **coeficiente de Dice** (bigramas) + **distancia de Levenshtein**
-- Mapeo automatico de municipios a unidades regionales (7 sedes: Chia, Facatativa, Fusagasuga, Girardot, Soacha, Ubate, Zipaquira)
-- Resolucion automatica de nivel y nivel academico basado en el nombre del programa
-- Manejo de acentos, mayusculas/minusculas, encoding y errores tipograficos
+### Automatizar Reportes para Boletin
 
-### Agregacion y exportacion
-- Agrupacion por: Categoria, Unidad Regional, Nivel, Nivel Academico, Programa Academico, Ano, Periodo
-- Conteo automatico (GROUP BY + COUNT)
-- Generacion de archivo ESTUDIANTES.xlsx con formato estandarizado (8 columnas)
-- Periodos en formato IPA (semestre 1) e IIPA (semestre 2)
+- Carga de archivos de **Matriculados**, **Admitidos**, **Primiparos**,
+  **Inscritos** y **Graduados**.
+- Soporte para CSV y Excel (`.csv`, `.xlsx`, `.xls`).
+- Archivo historico opcional `ESTUDIANTES.xlsx` para consolidar datos previos.
+- Normalizacion de programas, municipios, unidades regionales, niveles y
+  periodos academicos.
+- Agrupacion por categoria, unidad regional, nivel, nivel academico, programa,
+  anio y periodo.
+- Exportacion de `ESTUDIANTES.xlsx` con estructura institucional.
+- Persistencia en Supabase mediante Prisma, con validacion previa de datos
+  existentes y confirmacion de sobrescritura por categoria.
+- Dashboard con filtros, tarjetas resumen, graficas por periodo, distribucion,
+  radar por sede, top programas y descarga completa de la base.
 
-### Persistencia en base de datos
-- Almacenamiento en **Supabase** (PostgreSQL) via **Prisma ORM v7**
-- Upsert con constraint UNIQUE para evitar duplicados
-- Verificacion de datos existentes antes de sobrescribir
-- Confirmacion por categoria: el usuario elige que categorias reemplazar
+### Pronostico de Poblacion Estudiantil
 
-### Dashboard estadistico
-- **Tarjetas resumen** con total del ultimo periodo y % de cambio vs periodo anterior
-- **Filtros interactivos**: Unidad Regional, Programa Academico y Ano (por defecto muestra todo)
-- **Linea de tiempo** por periodo academico (eje X = ano-periodo, ordenado IPA antes de IIPA)
-- **Distribucion acumulada** (AreaChart apilado)
-- **Media y desviacion estandar por ano** (barras + tabla con sigma)
-- **Estadisticas por tipo de periodo** (IPA vs IIPA con mu y sigma)
-- **Tasa de crecimiento interanual** (variacion % ano a ano)
-- **Radar por unidad regional** (comparacion entre sedes)
-- **Top 10 programas academicos** (barras horizontales)
-- **Distribucion por nivel de formacion** (Pregrado, Tecnologia, Posgrado)
-- **Boton de descarga** de la base de datos completa como Excel
+- Consume la tabla `estudiantes` normalizada.
+- Calcula los siguientes 3 periodos academicos a partir del ultimo periodo
+  disponible.
+- Usa media ponderada lineal por serie historica de categoria, sede, nivel y
+  programa.
+- Maneja escenarios con datos faltantes entre `IPA` e `IIPA` usando ratios por
+  categoria y nivel.
+- Muestra historico y pronostico en grafica de linea.
+- Permite filtrar por categoria y descargar reportes Excel para pregrado y
+  posgrado.
 
-### UX
-- Loading spinners animados en botones de descarga y procesamiento
-- Barra de progreso con mensajes contextuales por etapa de procesamiento
-- Indicacion de columnas requeridas por archivo (expandible)
-- Toasts de confirmacion, advertencia y error
+### Encuentros Dialogicos
+
+- Carga de planes de mejoramiento de estudiantes y docentes.
+- Vista previa antes de guardar: nuevos registros, registros a actualizar y
+  filas omitidas.
+- Upsert de planes con llaves unicas por encuentro, anio, programa, sede,
+  facultad y actividad.
+- Carga de encuestas de percepcion de estudiantes y docentes.
+- Estadisticas de cumplimiento y satisfaccion con filtros por anio, programa y
+  encuentro.
+- Exportacion de bases de planes y encuestas en Excel.
+
+## Agentes de IA
+
+La ruta `/agentes` implementa un chat institucional con dos agentes:
+
+| Agente | Rol | Acceso a datos |
+|---|---|---|
+| `analista` | Analista de Datos Academicos | Puede consultar la base institucional en modo solo lectura |
+| `soporte` | Agente de Soporte | Orienta sobre el uso del portal sin consultar datos especificos de BD |
+
+El usuario puede cambiar entre agentes, iniciar chats nuevos, cargar
+conversaciones guardadas y ajustar el modelo de IA desde el modal de
+configuracion.
+
+### Agente Analista
+
+El Analista esta pensado para preguntas como:
+
+- Total de matriculados por anio, periodo, sede o programa.
+- Comparativas entre unidades regionales.
+- Tendencias de primiparos, inscritos, admitidos o graduados.
+- Promedios de encuestas de estudiantes y docentes.
+- Cumplimiento de planes de mejoramiento.
+
+Su contexto de base de datos esta definido en `lib/ai/db-context.ts`. Ese
+contexto explica al modelo las tablas permitidas, columnas clave, reglas de
+negocio y ejemplos SQL. La base se consulta con `pg` directamente desde
+`app/api/agentes/chat/route.ts`.
+
+Tablas disponibles para el Analista:
+
+- `estudiantes`
+- `encuestas_estudiantes`
+- `encuestas_docentes`
+- `planes_mejoramiento_estudiantes`
+- `planes_mejoramiento_docentes`
+
+Reglas importantes del Analista:
+
+- Para totales de estudiantes siempre usa `SUM(cantidad)`.
+- Para matricula anual sin doble conteo usa `periodo = 'IPA'`.
+- La columna de anio en PostgreSQL debe escribirse como `"a&ntilde;o"` dentro del SQL.
+- `Primiparos` es el valor exacto de categoria para estudiantes de primer
+  ingreso.
+- Las encuestas usan promedios (`AVG`) sobre escalas de satisfaccion.
+- `calificacion_cumplimiento` se interpreta en escala `0` a `1`, no `0` a
+  `100`.
+
+### Flujo del Analista
+
+El endpoint principal es:
+
+```txt
+POST /api/agentes/chat
+```
+
+Cuando el agente activo es `analista`, el servidor ejecuta un flujo por fases y
+lo transmite al frontend como NDJSON (`application/x-ndjson`). La UI muestra el
+avance en vivo: plan, SQL generado, ejecucion e interpretacion.
+
+Flujo completo:
+
+1. **Pre-check de contexto**
+   - Revisa si la pregunta puede responderse con el resumen o historial reciente.
+   - Si no requiere datos nuevos, responde directamente.
+   - Si necesita cifras reales, pasa a planificacion.
+
+2. **Planificacion**
+   - El modelo genera un plan sin SQL.
+   - Cada item del plan representa una dimension distinta: total, sede,
+     programa, nivel, periodo, etc.
+   - El plan se limita a maximo 4 consultas.
+
+3. **Resumen del plan**
+   - El sistema crea una frase corta que resume que se va a consultar.
+   - Este resumen se usa como contexto para las fases siguientes.
+
+4. **Validacion del plan**
+   - Otro paso del modelo valida si el plan responde la pregunta del usuario.
+   - Si no responde, el sistema pregunta si la BD puede contestar esa solicitud.
+   - Si la BD si puede, mejora el plan y reintenta.
+   - Hay hasta 4 intentos de mejora.
+
+5. **Generacion de SQL por item**
+   - Para cada item validado, el modelo genera una consulta SQL.
+   - La respuesta debe venir como un unico bloque `SELECT`.
+   - No se aceptan escrituras ni consultas libres.
+
+6. **Validacion de seguridad SQL**
+   - Solo se permiten consultas que empiezan por `SELECT`.
+   - Se bloquean `INSERT`, `UPDATE`, `DELETE`, `DROP`, `CREATE`, `ALTER`,
+     `TRUNCATE`, `GRANT`, `REVOKE`, `MERGE`, `CALL`, `EXEC`, `COPY`,
+     `VACUUM`, `ANALYZE` y `EXPLAIN ANALYZE`.
+   - No se permiten comentarios SQL ni punto y coma.
+   - Solo se permiten las tablas institucionales listadas arriba.
+
+7. **Ejecucion read-only**
+   - El servidor abre una transaccion `BEGIN READ ONLY`.
+   - Si la consulta no trae `LIMIT`, agrega `LIMIT 200`.
+   - Si trae `LIMIT`, lo reduce a maximo `300`.
+   - En error ejecuta `ROLLBACK`; en exito ejecuta `COMMIT`.
+
+8. **Compresion de resultados**
+   - Normaliza valores nulos numericos a `0`.
+   - Devuelve muestra de hasta 15 filas.
+   - Agrega estadisticas numericas (`min`, `max`, `avg`, `sum`) cuando aplica.
+   - Esto evita respuestas demasiado grandes para el modelo.
+
+9. **Interpretacion**
+   - El modelo interpreta cada resultado en espanol formal.
+   - No muestra nombres tecnicos de tablas ni SQL al usuario final.
+   - Cada interpretacion se envia en vivo a la interfaz.
+
+10. **Composicion final**
+    - Genera un parrafo introductorio.
+    - Agrega bullets con cada interpretacion.
+    - Devuelve metadatos del modelo usado, trazas de fallback y SQL ejecutado.
+
+### Agente de Soporte
+
+El agente `soporte` no ejecuta SQL. Su proposito es orientar al usuario sobre:
+
+- Dashboard de Estudiantes.
+- Automatizacion de Reportes.
+- Pronostico Estudiantil.
+- Encuentros Dialogicos.
+- Planes de Mejoramiento.
+- Uso de los Agentes de IA.
+
+Flujo del Soporte:
+
+1. Recibe la pregunta, historial y resumen disponible.
+2. Genera una respuesta con el modelo seleccionado o la cola de fallback.
+3. Ejecuta una validacion/refinamiento final para asegurar claridad.
+4. Responde en espanol, sin revelar informacion sensible ni datos especificos
+   de BD.
+
+### Modelos y proveedores
+
+Los modelos disponibles estan definidos en `lib/ai/model-options.ts`.
+
+Proveedores soportados:
+
+- Groq
+- Cerebras
+- Kimi
+- OpenRouter
+
+El sistema maneja dos colas de fallback, una para `analista` y otra para
+`soporte`. Si `autoSwitch` esta activo, el backend intenta el modelo preferido y
+luego avanza por la cola cuando un proveedor falla, no tiene API key o devuelve
+error.
+
+El modal `components/agentes/SettingsModal.tsx` permite:
+
+- Elegir modelo preferido.
+- Activar o desactivar cambio automatico de modelo.
+- Ingresar una API key personalizada para la sesion.
+
+Las API keys personalizadas se envian con la solicitud y se usan solo para esa
+sesion del navegador. Si no se ingresa una, el servidor usa las variables de
+entorno correspondientes.
+
+### Historial, resumen y titulos
+
+La persistencia del chat usa los modelos Prisma `Chat` y `ChatMessage`:
+
+- `Chat`: conversacion por agente, titulo, fecha de creacion y actualizacion.
+- `ChatMessage`: mensajes `user` y `assistant` asociados a un chat.
+
+Limites actuales:
+
+- Maximo 20 chats guardados por agente.
+- Maximo 30 mensajes por chat.
+- Maximo 10 mensajes recientes como contexto directo.
+
+Cuando el chat supera la ventana de contexto, el frontend pide al backend un
+resumen corto de la conversacion reciente. Ese resumen se combina con los
+ultimos mensajes para mantener continuidad sin enviar todo el historial.
+
+Tambien se genera un titulo automatico de maximo 6 palabras a partir del
+resumen de la conversacion.
+
+### Streaming hacia la interfaz
+
+El backend envia eventos NDJSON con estos pasos:
+
+- `planning`: plan de consulta.
+- `executing`: SQL generado y estado de ejecucion.
+- `interpreting`: interpretacion parcial de resultados.
+- `validating_answer`: validacion de coherencia.
+- `translating`: verificacion de idioma.
+- `done`: respuesta final.
+
+La pagina `app/agentes/page.tsx` lee el stream con `ReadableStream`, actualiza
+la burbuja de progreso y luego guarda la respuesta final en BD.
 
 ## Stack tecnologico
 
 | Tecnologia | Uso |
 |---|---|
-| **Next.js 16** | Framework full-stack (App Router) |
-| **TypeScript** | Tipado estatico |
-| **Tailwind CSS 4** | Estilos |
-| **shadcn/ui** | Componentes UI (Card, Table, Progress, Badge, Button) |
-| **Recharts** | Graficas del dashboard |
-| **Prisma v7** | ORM con adapter pattern (@prisma/adapter-pg) |
-| **Supabase** | Base de datos PostgreSQL |
-| **PapaParse** | Parseo de CSV con delimitador `;` y header |
-| **SheetJS (xlsx)** | Lectura/escritura de archivos Excel |
-| **react-dropzone** | Zonas de carga de archivos |
-| **sonner** | Notificaciones toast |
-| **Dice + Levenshtein** | Fuzzy matching generico (sin dependencias externas) |
+| Next.js 16 | Framework full-stack con App Router |
+| React 19 | UI cliente |
+| TypeScript | Tipado estatico |
+| Tailwind CSS 4 | Estilos |
+| shadcn/ui y componentes propios | Botones, tablas, cards, progreso y UI base |
+| Lucide React | Iconografia |
+| Recharts | Graficas del dashboard y pronostico |
+| Prisma v7 | ORM para PostgreSQL |
+| Supabase/PostgreSQL | Base de datos institucional |
+| pg | Consultas read-only directas desde el agente analista |
+| PapaParse | Lectura de CSV |
+| SheetJS (`xlsx`) | Lectura y escritura de Excel |
+| react-dropzone | Carga de archivos |
+| sonner | Notificaciones toast |
+| Dice + Levenshtein | Normalizacion fuzzy sin dependencias externas |
 
 ## Estructura del proyecto
 
-```
+```txt
 app/
-  page.tsx                           # Landing page
-  automatizar-reportes/page.tsx      # Pagina principal con upload + dashboard
+  page.tsx
+  automatizar-reportes/page.tsx
+  pronostico-estudiantil/page.tsx
+  encuentros-dialogicos/page.tsx
+  agentes/page.tsx
   api/
-    process-reports/route.ts         # Pipeline: parse -> normalize -> aggregate -> save -> xlsx
-    check-existing/route.ts          # Verificar datos existentes por ano+periodo
-    dashboard-data/route.ts          # Datos para el dashboard (con normalizacion)
-    export-db/route.ts               # Descargar BD completa como Excel
-    health/route.ts                  # Health check de conexion a BD
+    process-reports/route.ts
+    check-existing/route.ts
+    dashboard-data/route.ts
+    export-db/route.ts
+    pronostico/route.ts
+    pronostico/download/route.ts
+    agentes/chat/route.ts
+    agentes/chats/route.ts
+    agentes/chats/[id]/route.ts
+    agentes/chats/[id]/messages/route.ts
+    encuentros-dialogicos/*
 
 components/
+  agentes/
+    SettingsModal.tsx
+    UsageBar.tsx
   reports/
-    upload-form.tsx                  # Formulario de carga con flujo de confirmacion
-    file-upload-zone.tsx             # Dropzone individual con columnas requeridas
-    confirm-overwrite.tsx            # Dialogo de confirmacion por categoria
-    results-table.tsx                # Tabla paginada de resultados
-    dashboard.tsx                    # Dashboard completo con filtros y graficas
-  ui/                                # Componentes shadcn/ui + spinner
+    upload-form.tsx
+    dashboard.tsx
+    results-table.tsx
+    file-upload-zone.tsx
+    confirm-overwrite.tsx
+  layout/
+    navbar.tsx
+  ui/
 
 lib/
-  types.ts                          # Tipos: NormalizedStudentRow, EstudiantesRow
-  prisma.ts                         # Singleton de Prisma con PrismaPg adapter
+  ai/
+    db-context.ts
+    model-options.ts
+  aggregation/
+    aggregate-students.ts
+  export/
+    generate-xlsx.ts
+  normalization/
+    canonical-data.ts
+    fuzzy-matcher.ts
+    municipio-mapper.ts
+    nivel-resolver.ts
+    program-normalizer.ts
   parsers/
-    parse-matriculados.ts            # Parser CSV/Excel -> NormalizedStudentRow[]
+    parse-matriculados.ts
     parse-admitidos.ts
     parse-primiparos.ts
     parse-inscritos.ts
     parse-graduados.ts
-    parse-estudiantes-historico.ts   # Parser del historico ESTUDIANTES.xlsx
-    read-file.ts                     # Auto-deteccion CSV vs Excel
-  normalization/
-    fuzzy-matcher.ts                 # Dice coefficient + Levenshtein (generico)
-    canonical-data.ts                # Nombres canonicos y reglas de nivel
-    program-normalizer.ts            # Wrapper de fuzzy para programas
-    municipio-mapper.ts              # Wrapper de fuzzy para municipios
-    nivel-resolver.ts                # Inferir nivel/nivel academico del programa
-  aggregation/
-    aggregate-students.ts            # GROUP BY + COUNT con merge de historico
-  export/
-    generate-xlsx.ts                 # Generacion de ESTUDIANTES.xlsx
+    parse-estudiantes-historico.ts
+    read-file.ts
   supabase/
-    save-estudiantes.ts              # Upsert con filtro por categorias permitidas
+    save-estudiantes.ts
+  pronostico.ts
+  prisma.ts
+  types.ts
+
+prisma/
+  schema.prisma
+  migrations/
 
 scripts/
-  seed-historico.ts                  # Cargar ESTUDIANTES.xlsx inicial a Supabase
-  normalize-db.ts                    # Normalizar nivel/periodo en BD existente
-  fix-programs.ts                    # Corregir duplicados de programas
-  test-fuzzy.ts                      # 91 tests del fuzzy matcher
-```
-
-## Instalacion y desarrollo
-
-```bash
-# Instalar dependencias
-npm install
-
-# Configurar variables de entorno
-cp .env.example .env
-# Editar .env con tus credenciales de Supabase
-
-# Generar cliente Prisma
-npx prisma generate
-
-# Ejecutar migraciones
-npx prisma migrate deploy
-
-# (Opcional) Cargar datos historicos
-npx tsx scripts/seed-historico.ts
-
-# Iniciar servidor de desarrollo
-npm run dev
+  seed-historico.ts
+  seed-encuestas.ts
+  normalize-db.ts
+  normalize-programs-db.ts
+  fix-programs.ts
+  test-fuzzy.ts
 ```
 
 ## Variables de entorno
 
 | Variable | Descripcion |
 |---|---|
-| `DATABASE_URL` | Connection string de Supabase (puerto 6543, pgbouncer) |
-| `DIRECT_URL` | Connection string directo (puerto 5432, para migraciones) |
+| `DATABASE_URL` | Connection string de Supabase/PostgreSQL usada por Prisma y consultas read-only |
+| `DIRECT_URL` | Connection string directo para migraciones |
+| `GROQ_API_KEY` | API key del proveedor Groq |
+| `CEREBRAS_API_KEY` | API key del proveedor Cerebras |
+| `KIMI_API_KEY` | API key del proveedor Kimi/Moonshot |
+| `OPENROUTER_API_KEY` | API key de OpenRouter |
+
+No todas las claves de IA son obligatorias si el proveedor correspondiente no
+se usa. Con `autoSwitch` activo, el sistema salta modelos sin API key y prueba
+el siguiente disponible.
+
+## Instalacion y desarrollo
+
+```bash
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run dev
+```
+
+Comandos utiles:
+
+```bash
+npm run build
+npm run lint
+npx tsx scripts/seed-historico.ts
+npx tsx scripts/normalize-db.ts
+npx tsx scripts/test-fuzzy.ts
+```
 
 ## Deploy en Vercel
 
-1. Importar el repositorio en Vercel
-2. Framework: Next.js (auto-detectado)
-3. Agregar las variables de entorno `DATABASE_URL` y `DIRECT_URL`
-4. Deploy automatico
+1. Importar el repositorio en Vercel.
+2. Framework: Next.js.
+3. Configurar `DATABASE_URL`, `DIRECT_URL` y las API keys de IA necesarias.
+4. Ejecutar deploy.
 
-El build ejecuta `prisma generate && next build` automaticamente.
+El build ejecuta:
+
+```bash
+prisma generate && next build
+```
+
+## Notas de seguridad del agente IA
+
+- El Analista no recibe permisos de escritura sobre la base.
+- El SQL generado por modelos se valida antes de ejecutarse.
+- La ejecucion se realiza dentro de una transaccion `READ ONLY`.
+- Solo se permiten tablas institucionales explicitamente listadas.
+- La UI muestra trazas de modelos usados o fallidos, pero no expone API keys.
+- El agente de Soporte tiene instrucciones explicitas para no revelar secretos,
+  URLs de BD, IDs sensibles ni claves API.
