@@ -303,7 +303,7 @@ function PreviewModal({
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-4 border-b border-[#edeeef] px-6 py-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-b border-[#edeeef] px-6 py-4">
           <div className="rounded-xl bg-[#f3f4f5] p-4 text-center">
             <p className="font-[Manrope] text-2xl font-extrabold text-[#191c1d]">{data.total}</p>
             <p className="mt-0.5 text-xs font-medium text-[#6e7a6e]">Total en archivo</p>
@@ -366,12 +366,12 @@ function PreviewModal({
         </div>
 
         {/* Footer actions */}
-        <div className="flex items-center justify-end gap-3 border-t border-[#edeeef] px-6 py-4">
+        <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 border-t border-[#edeeef] px-6 py-4">
           <button
             type="button"
             onClick={onCancel}
             disabled={uploading}
-            className="rounded-lg border border-[#bdcabb] px-5 py-2.5 text-sm font-bold text-[#191c1d] hover:bg-[#f3f4f5] disabled:opacity-50"
+            className="w-full sm:w-auto rounded-lg border border-[#bdcabb] px-5 py-2.5 text-sm font-bold text-[#191c1d] hover:bg-[#f3f4f5] disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -379,7 +379,7 @@ function PreviewModal({
             type="button"
             onClick={onConfirm}
             disabled={uploading}
-            className="inline-flex items-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {uploading ? (
               <Loader2 className="size-4 animate-spin" />
@@ -515,12 +515,12 @@ function UploadCard({
       )}
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3">
         <button
           type="button"
           onClick={onPreview}
           disabled={!state.file || busy}
-          className={`inline-flex items-center gap-2 rounded px-5 py-2.5 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50 ${accent.btn}`}
+          className={`w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded px-5 py-2.5 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50 ${accent.btn}`}
         >
           {state.uploadState === "previewing" ? (
             <><Loader2 className="size-4 animate-spin" /> Analizando…</>
@@ -534,7 +534,7 @@ function UploadCard({
         <button
           type="button"
           onClick={onExport}
-          className="inline-flex items-center gap-2 rounded border border-[#bdcabb] px-5 py-2.5 text-sm font-bold text-[#191c1d] transition-colors hover:bg-[#f3f4f5]"
+          className="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded border border-[#bdcabb] px-5 py-2.5 text-sm font-bold text-[#191c1d] transition-colors hover:bg-[#f3f4f5]"
         >
           <Download className="size-4" />
           {exportLabel}
@@ -604,13 +604,13 @@ function EncuestaPreviewModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 border-t border-[#edeeef] px-6 py-4">
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 border-t border-[#edeeef] px-6 py-4">
           <button type="button" onClick={onCancel} disabled={uploading}
-            className="rounded-lg px-5 py-2 text-sm font-semibold text-[#6e7a6e] hover:bg-[#f3f4f5] disabled:opacity-50">
+            className="w-full sm:w-auto justify-center inline-flex items-center rounded-lg px-5 py-2 text-sm font-semibold text-[#6e7a6e] hover:bg-[#f3f4f5] disabled:opacity-50 border sm:border-transparent border-[#bdcabb]">
             Cancelar
           </button>
           <button type="button" onClick={onConfirm} disabled={uploading}
-            className="inline-flex items-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-2 text-sm font-bold text-white disabled:opacity-50 hover:opacity-90">
+            className="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-2 text-sm font-bold text-white disabled:opacity-50 hover:opacity-90">
             {uploading ? <><Loader2 className="size-4 animate-spin" /> Guardando…</> : <><CheckCircle2 className="size-4" /> Confirmar y guardar</>}
           </button>
         </div>
@@ -667,7 +667,7 @@ function EncuestaUploadCard({
       <p className="mb-6 flex-grow text-sm leading-relaxed text-[#3e4a3e]">{description}</p>
 
       {/* Inputs de contexto */}
-      <div className="mb-4 grid grid-cols-2 gap-3">
+      <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Número de encuentro</label>
           <input
@@ -737,15 +737,15 @@ function EncuestaUploadCard({
       )}
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3">
         <button type="button" onClick={onPreview} disabled={!canSend || busy}
-          className={`inline-flex items-center gap-2 rounded px-5 py-2.5 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50 ${accent.btn}`}>
+          className={`w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded px-5 py-2.5 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50 ${accent.btn}`}>
           {state.uploadState === "previewing" ? <><Loader2 className="size-4 animate-spin" /> Analizando…</>
            : state.uploadState === "uploading" ? <><Loader2 className="size-4 animate-spin" /> Guardando…</>
            : <><Upload className="size-4" /> Cargar encuesta</>}
         </button>
         <button type="button" onClick={onExport}
-          className="inline-flex items-center gap-2 rounded border border-[#bdcabb] px-5 py-2.5 text-sm font-bold text-[#191c1d] transition-colors hover:bg-[#f3f4f5]">
+          className="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded border border-[#bdcabb] px-5 py-2.5 text-sm font-bold text-[#191c1d] transition-colors hover:bg-[#f3f4f5]">
           <Download className="size-4" /> Descargar BD
         </button>
       </div>
@@ -1033,27 +1033,27 @@ export default function EncuentrosDialogicosPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-4">
-                <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1 w-full sm:w-auto">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Año</label>
                   <select value={selectedAnio} onChange={(e) => handleAnioChange(e.target.value)}
-                    className="rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]">
+                    className="w-full rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]">
                     <option value="">Todos</option>
                     {stats?.filters.anios.map((a) => <option key={a} value={String(a)}>{a}</option>)}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 w-full sm:w-auto">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Programa</label>
                   <select value={selectedPrograma} onChange={(e) => handleProgramaChange(e.target.value)}
-                    className="rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] min-w-[200px]">
+                    className="w-full rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] sm:min-w-[200px]">
                     <option value="todos">Todos los programas</option>
                     {stats?.filters.programas.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 w-full sm:w-auto">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Tipo de encuentro</label>
                   <select value={selectedEncuentro} onChange={(e) => handleEncuentroChange(e.target.value)}
-                    className="rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] min-w-[200px]">
+                    className="w-full rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] sm:min-w-[200px]">
                     <option value="todos">Todos</option>
                     {stats?.filters.encuentros.map((e) => <option key={e} value={e}>{e}</option>)}
                   </select>
@@ -1140,19 +1140,19 @@ export default function EncuentrosDialogicosPage() {
                 <h3 className="mb-1 font-[Manrope] text-xl font-bold text-[#191c1d]">Resultados de Percepción</h3>
                 <p className="text-sm text-[#3e4a3e]">Promedio de satisfacción (escala 1–5) por unidad regional.</p>
               </div>
-              <div className="flex flex-wrap gap-4">
-                <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1 w-full sm:w-auto">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Año</label>
                   <select value={encAnio} onChange={(e) => handleEncAnioChange(e.target.value)}
-                    className="rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]">
+                    className="w-full rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]">
                     <option value="">Todos</option>
                     {encStats?.filters.anios.map((a) => <option key={a} value={String(a)}>{a}</option>)}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 w-full sm:w-auto">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Encuentro</label>
                   <select value={encEncuentro} onChange={(e) => handleEncEncuentroChange(e.target.value)}
-                    className="rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] min-w-[200px]">
+                    className="w-full rounded-lg border border-[#bdcabb] bg-white px-4 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] sm:min-w-[200px]">
                     <option value="">Todos</option>
                     {encStats?.filters.encuentros.map((e) => <option key={e} value={e}>{e}</option>)}
                   </select>
@@ -1162,7 +1162,7 @@ export default function EncuentrosDialogicosPage() {
 
             {/* Métricas resumen */}
             {encStats && (encStats.estudiantes.total > 0 || encStats.docentes.total > 0) && (
-              <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   { label: "Respuestas docentes",      value: String(encStats.docentes.total),    color: "border-[#00682f]" },
                   { label: "Satisfacción docentes",    value: encStats.docentes.avgScore    != null ? `${encStats.docentes.avgScore}/5`    : "—", color: "border-[#00682f]" },
@@ -1240,8 +1240,8 @@ function ChartBar({ title, globalPct, total, bars, color }: {
       ) : (
         <div className="space-y-3">
           {bars.map((bar) => (
-            <div key={bar.label} className="group/bar flex items-center gap-3">
-              <span className="w-36 shrink-0 truncate text-right text-[11px] text-[#6e7a6e]" title={bar.label}>
+            <div key={bar.label} className="group/bar flex items-center gap-2 sm:gap-3">
+              <span className="w-24 sm:w-36 shrink-0 truncate text-right text-[11px] text-[#6e7a6e]" title={bar.label}>
                 {bar.label}
               </span>
               <div className="relative flex-1 h-6 rounded-full bg-[#e7e8e9] overflow-hidden">
