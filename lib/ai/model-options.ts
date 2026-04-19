@@ -1,5 +1,5 @@
 export type AgentType = "analista" | "soporte";
-export type AiProvider = "groq" | "cerebras";
+export type AiProvider = "groq" | "cerebras" | "kimi" | "openrouter";
 
 export interface AiModelOption {
   id: string;
@@ -12,6 +12,8 @@ export interface AiModelOption {
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
   groq: "Groq",
   cerebras: "Cerebras",
+  kimi: "Kimi",
+  openrouter: "OpenRouter",
 };
 
 export const AI_MODELS: AiModelOption[] = [
@@ -64,6 +66,41 @@ export const AI_MODELS: AiModelOption[] = [
     label: "Cerebras Llama 3.1 8B",
     desc: "Rapido para soporte y resumen",
   },
+  {
+    id: "kimi:moonshot-v1-32k",
+    provider: "kimi",
+    model: "moonshot-v1-32k",
+    label: "Kimi Moonshot 32K",
+    desc: "Balanceado, gran contexto",
+  },
+  {
+    id: "kimi:moonshot-v1-8k",
+    provider: "kimi",
+    model: "moonshot-v1-8k",
+    label: "Kimi Moonshot 8K",
+    desc: "Rapido para consultas simples",
+  },
+  {
+    id: "kimi:moonshot-v1-128k",
+    provider: "kimi",
+    model: "moonshot-v1-128k",
+    label: "Kimi Moonshot 128K",
+    desc: "Mayor contexto para analisis extensos",
+  },
+  {
+    id: "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+    provider: "openrouter",
+    model: "nvidia/nemotron-3-super-120b-a12b:free",
+    label: "OR NVIDIA Nemotron 120B",
+    desc: "Gran modelo NVIDIA, gratuito",
+  },
+  {
+    id: "openrouter:nvidia/nemotron-nano-9b-v2:free",
+    provider: "openrouter",
+    model: "nvidia/nemotron-nano-9b-v2:free",
+    label: "OR NVIDIA Nemotron 9B",
+    desc: "Rapido, razonamiento, gratuito",
+  },
 ];
 
 export const FALLBACK_MODEL_IDS: Record<AgentType, string[]> = {
@@ -72,18 +109,26 @@ export const FALLBACK_MODEL_IDS: Record<AgentType, string[]> = {
     "groq:llama-3.1-8b-instant",
     "groq:mixtral-8x7b-32768",
     "groq:gemma2-9b-it",
+    "kimi:moonshot-v1-32k",
     "cerebras:qwen-3-235b",
     "cerebras:gpt-oss-120b",
     "cerebras:llama-3.1-8b",
+    "kimi:moonshot-v1-128k",
+    "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+    "openrouter:nvidia/nemotron-nano-9b-v2:free",
   ],
   soporte: [
     "groq:llama-3.1-8b-instant",
     "groq:llama-3.3-70b-versatile",
     "groq:gemma2-9b-it",
     "groq:mixtral-8x7b-32768",
+    "kimi:moonshot-v1-8k",
     "cerebras:llama-3.1-8b",
     "cerebras:qwen-3-235b",
     "cerebras:gpt-oss-120b",
+    "kimi:moonshot-v1-32k",
+    "openrouter:nvidia/nemotron-nano-9b-v2:free",
+    "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
   ],
 };
 

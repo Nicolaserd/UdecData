@@ -68,12 +68,16 @@ const AGENTS = {
 };
 
 const STEP_LABELS: Record<string, { label: string; icon: string }> = {
-  generating_sql: { label: "Generando consulta SQL...",      icon: "🔍" },
-  validating:     { label: "Validando seguridad...",         icon: "🔒" },
-  executing:      { label: "Ejecutando en base de datos...", icon: "⚡" },
-  analyzing:      { label: "Analizando resultados...",       icon: "📊" },
-  responding:     { label: "Preparando respuesta...",        icon: "✍️" },
-  validating_answer: { label: "Validando respuesta...",      icon: "✓" },
+  planning:          { label: "Generando plan de consulta...",  icon: "📋" },
+  executing:         { label: "Ejecutando en base de datos...", icon: "⚡" },
+  interpreting:      { label: "Interpretando resultados...",    icon: "📊" },
+  validating_answer: { label: "Validando respuesta...",         icon: "✓"  },
+  translating:       { label: "Verificando idioma...",          icon: "🌐" },
+  // legado soporte
+  generating_sql:    { label: "Generando consulta SQL...",      icon: "🔍" },
+  validating:        { label: "Validando seguridad...",         icon: "🔒" },
+  analyzing:         { label: "Analizando resultados...",       icon: "📊" },
+  responding:        { label: "Preparando respuesta...",        icon: "✍️" },
 };
 
 function genId() { return Math.random().toString(36).slice(2); }
@@ -300,24 +304,68 @@ function ChatBubble({ msg, agentType, marioMode }: { msg: Message; agentType: Ag
 }
 
 // ── Indicador de escritura ─────────────────────────────────────────────────────
-function TypingIndicator({ agentType, step, marioMode }: { agentType: AgentType; step: string | null; marioMode: boolean }) {
-  const stepInfo = step ? STEP_LABELS[step] : null;
+function TypingIndicator({
+  agentType, step, marioMode, liveContent,
+}: {
+  agentType: AgentType;
+  step: { step: string; current?: number; total?: number } | null;
+  marioMode: boolean;
+  liveContent: { plan?: string[]; sql?: string; description?: string; interpretation?: string } | null;
+}) {
+  const stepInfo = step ? STEP_LABELS[step.step] : null;
+  const detail = step?.current && step?.total ? ` (${step.current} de ${step.total})` : "";
+
   return (
     <div className="flex items-start gap-3 max-w-4xl">
       <div className="w-9 h-9 rounded-full bg-[#2170e4]/10 shrink-0 flex items-center justify-center text-[#2170e4] mt-1 overflow-hidden">
         <AgentAvatar agentType={agentType} marioMode={marioMode} size={36} />
       </div>
-      <div className="bg-white px-5 py-4 rounded-2xl rounded-tl-none shadow-sm border border-[#bdcabb]/20 min-w-45">
+      <div className="bg-white px-5 py-4 rounded-2xl rounded-tl-none shadow-sm border border-[#bdcabb]/20 min-w-[280px] max-w-xl">
         <div className="flex gap-1.5 items-center">
           <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "0ms" }} />
           <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "150ms" }} />
           <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "300ms" }} />
         </div>
+
         {stepInfo && (
           <p className="text-xs text-slate-400 mt-2 font-['Work_Sans'] flex items-center gap-1.5">
             <span>{stepInfo.icon}</span>
-            <span>{stepInfo.label}</span>
+            <span>{stepInfo.label.replace("...", "") + detail + "..."}</span>
           </p>
+        )}
+
+        {/* Plan — lista numerada */}
+        {liveContent?.plan && liveContent.plan.length > 0 && (
+          <ol className="mt-3 space-y-1">
+            {liveContent.plan.map((item, i) => (
+              <li key={i} className="text-xs text-slate-600 flex gap-2">
+                <span className="text-[#2170e4] font-semibold shrink-0">{i + 1}.</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {/* SQL siendo elaborado/ejecutado */}
+        {liveContent?.sql && (
+          <div className="mt-3">
+            {liveContent.description && (
+              <p className="text-xs text-slate-500 mb-1 italic">{liveContent.description}</p>
+            )}
+            <pre className="text-[10px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 overflow-x-auto text-slate-600 leading-relaxed whitespace-pre-wrap">
+              {liveContent.sql}
+            </pre>
+          </div>
+        )}
+
+        {/* Interpretación */}
+        {liveContent?.interpretation && (
+          <div className="mt-3">
+            {liveContent.description && (
+              <p className="text-xs text-slate-400 mb-1 italic">{liveContent.description}</p>
+            )}
+            <p className="text-xs text-slate-600 leading-relaxed">{liveContent.interpretation}</p>
+          </div>
         )}
       </div>
     </div>
@@ -330,7 +378,13 @@ export default function AgentesPage() {
   const [conversations, setConversations] = useState<Record<AgentType, Message[]>>(createInitialConversations);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<{ step: string; current?: number; total?: number } | null>(null);
+  const [liveContent, setLiveContent] = useState<{
+    plan?: string[];
+    sql?: string;
+    description?: string;
+    interpretation?: string;
+  } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("groq:llama-3.3-70b-versatile");
   const [customApiKey, setCustomApiKey] = useState("");
@@ -574,6 +628,7 @@ export default function AgentesPage() {
     setInput("");
     setLoading(true);
     setCurrentStep(null);
+    setLiveContent(null);
 
     // Crear chat en BD si es el primer mensaje
     let chatId = activeChatId;
@@ -654,9 +709,19 @@ export default function AgentesPage() {
           try {
             const event = JSON.parse(line);
             if (event.step) {
-              setCurrentStep(event.step);
+              setCurrentStep({ step: event.step, current: event.current, total: event.total });
+              if (event.step === "planning" && event.plan) {
+                setLiveContent({ plan: event.plan });
+              } else if (event.step === "executing" && event.sql) {
+                setLiveContent({ description: event.description, sql: event.sql });
+              } else if (event.step === "interpreting" && event.text) {
+                setLiveContent({ description: event.description, interpretation: event.text });
+              } else if (event.step === "validating_answer" || event.step === "translating") {
+                setLiveContent(null);
+              }
             } else if (event.done) {
               setCurrentStep(null);
+              setLiveContent(null);
               const assistantMsg: Message = {
                 id: genId(),
                 role: "assistant",
@@ -682,6 +747,7 @@ export default function AgentesPage() {
               setConversations((prev) => ({ ...prev, [activeAgent]: [...prev[activeAgent], assistantMsg] }));
             } else if (event.error) {
               setCurrentStep(null);
+              setLiveContent(null);
               setConversations((prev) => ({
                 ...prev,
                 [activeAgent]: [...prev[activeAgent], { id: genId(), role: "assistant", content: event.error, timestamp: new Date(), error: true }],
@@ -697,6 +763,7 @@ export default function AgentesPage() {
       }));
     } finally {
       setCurrentStep(null);
+      setLiveContent(null);
       setLoading(false);
     }
   }
@@ -943,7 +1010,7 @@ export default function AgentesPage() {
                   {messages.map((msg) => (
                     <ChatBubble key={msg.id} msg={msg} agentType={activeAgent} marioMode={marioMode} />
                   ))}
-                  {loading && <TypingIndicator agentType={activeAgent} step={currentStep} marioMode={marioMode} />}
+                  {loading && <TypingIndicator agentType={activeAgent} step={currentStep} marioMode={marioMode} liveContent={liveContent} />}
                 </>
               )}
               <div ref={chatEndRef} />
