@@ -782,7 +782,12 @@ export function Dashboard() {
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="#bdcabb" />
                   <PolarAngleAxis dataKey="region" tick={{ fill: "#3e4a3e", fontSize: 11 }} />
-                  <PolarRadiusAxis tick={{ fill: "#6e7a6e", fontSize: 10 }} />
+                  <PolarRadiusAxis tick={{ fill: "#6e7a6e", fontSize: 10 }} tickFormatter={(v: number) => v.toLocaleString("es-CO")} />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    formatter={(value: number, name: string) => [value.toLocaleString("es-CO"), name]}
+                    labelFormatter={(label: string) => `Sede: ${label}`}
+                  />
                   {CATEGORIAS.map((cat) => (
                     <Radar
                       key={cat}
