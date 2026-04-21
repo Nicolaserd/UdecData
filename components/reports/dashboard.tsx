@@ -786,7 +786,7 @@ export function Dashboard() {
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
                     formatter={(value, name) => [Number(value ?? 0).toLocaleString("es-CO"), String(name)]}
-                    labelFormatter={(label: string) => `Sede: ${label}`}
+                    labelFormatter={(label) => `Sede: ${label}`}
                   />
                   {CATEGORIAS.map((cat) => (
                     <Radar
