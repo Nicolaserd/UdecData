@@ -96,7 +96,7 @@ export default function AutomatizarReportesPage() {
       <footer className="w-full border-t border-slate-200 bg-slate-50 px-4 py-8 sm:px-8 sm:py-12">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
           <p className="text-sm text-[#3e4a3e]">
-            © Universidad de Cundinamarca - Academic Intelligence Portal
+            Institutional Intelligence Unit.
           </p>
           <div className="flex flex-wrap justify-center gap-6 md:justify-end">
             <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Privacy Policy</a>

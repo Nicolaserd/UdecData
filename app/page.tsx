@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 import {
   ArrowRight,
   Clock3,
@@ -22,7 +23,41 @@ const heroImage =
 const serviceImage =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuBfoWuDQee-V1IeHlkb-SCSEwil6Cf2t8qzOmpERiL1CdAYa9G8AB-IyuAMFFbPC5o5EK3KFLi9YdNPM1caydn6L5fCWi2xUuqYR9Xfwsa6rOQLFhASsHogednbPdO9Rdo_bo714YVxmKTmOmj3qwXdEG_-279h70m8EZSodF0R2KcaDAMWShTyhtsTIcDRnkr9pni9Xm_1kL7C8IvmxiM9qqWC_R8gTgtgLDi9SvAif_SDMHRXqAA3zJhKPvqNUwLFHpu5NGGNzV8";
 
-export default function HomePage() {
+function timeAgo(date: Date | null): string {
+  if (!date) return "Sin datos aún";
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "Hace un momento";
+  if (mins < 60) return `Hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Hace ${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `Hace ${days}d`;
+  const months = Math.floor(days / 30);
+  return `Hace ${months} mes${months > 1 ? "es" : ""}`;
+}
+
+export default async function HomePage() {
+  const [estudiantesRow, planesEstRow, planesDocRow, encEstRow, encDocRow] =
+    await Promise.all([
+      prisma.estudiante.findFirst({ orderBy: { created_at: "desc" }, select: { created_at: true } }),
+      prisma.planMejoramientoEstudiante.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
+      prisma.planMejoramientoDocente.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
+      prisma.encuestaEstudiante.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
+      prisma.encuestaDocente.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
+    ]);
+
+  const estudiantesDate = estudiantesRow?.created_at ?? null;
+
+  const encuentrosDates = [
+    planesEstRow?.updated_at,
+    planesDocRow?.updated_at,
+    encEstRow?.updated_at,
+    encDocRow?.updated_at,
+  ].filter(Boolean) as Date[];
+  const encuentrosDate = encuentrosDates.length
+    ? new Date(Math.max(...encuentrosDates.map((d) => d.getTime())))
+    : null;
   return (
     <main className="flex-1 bg-[#f8f9fa] font-home-body text-[#191c1d] pt-16">
       <NavBar activePage="home" />
@@ -130,7 +165,7 @@ export default function HomePage() {
 
                   <span className="font-home-label inline-flex items-center gap-1 text-xs text-[#6e7a6e]">
                     <Clock3 className="size-3.5" />
-                    Actualizado hace 2h
+                    {timeAgo(estudiantesDate)}
                   </span>
                 </div>
               </div>
@@ -179,7 +214,7 @@ export default function HomePage() {
 
                   <span className="font-home-label inline-flex items-center gap-1 text-xs text-[#6e7a6e]">
                     <Clock3 className="size-3.5" />
-                    Actualizado hace 2h
+                    {timeAgo(estudiantesDate)}
                   </span>
                 </div>
               </div>
@@ -228,7 +263,7 @@ export default function HomePage() {
 
                   <span className="font-home-label inline-flex items-center gap-1 text-xs text-[#6e7a6e]">
                     <Clock3 className="size-3.5" />
-                    Actualizado hace 2h
+                    {timeAgo(encuentrosDate)}
                   </span>
                 </div>
               </div>
@@ -299,12 +334,12 @@ export default function HomePage() {
                   listo para asistirle.
                 </p>
               </div>
-              <a
-                href="#"
+              <Link
+                href="/agentes"
                 className="font-home-display rounded-[0.25rem] bg-white px-4 py-2 text-center text-sm font-bold text-[#00682f]"
               >
                 Contactar Soporte
-              </a>
+              </Link>
             </article>
           </div>
         </div>
@@ -328,8 +363,7 @@ export default function HomePage() {
       <footer className="mt-auto w-full border-t border-neutral-200 bg-neutral-50 py-8 text-xs">
         <div className="flex flex-col items-center justify-between gap-4 px-12 md:flex-row">
           <p className="font-home-label text-neutral-500">
-            © 2024 Universidad de Cundinamarca. Institutional Intelligence
-            Unit.
+            Institutional Intelligence Unit.
           </p>
           <div className="flex flex-wrap gap-6">
             <a

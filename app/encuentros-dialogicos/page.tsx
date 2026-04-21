@@ -1207,7 +1207,7 @@ export default function EncuentrosDialogicosPage() {
       <footer className="mt-auto w-full border-t border-neutral-200 bg-neutral-50 py-8 text-xs">
         <div className="flex flex-col items-center justify-between gap-4 px-12 md:flex-row">
           <p className="font-home-label text-neutral-500">
-            © 2024 Universidad de Cundinamarca. Institutional Intelligence Unit.
+            Institutional Intelligence Unit.
           </p>
           <div className="flex flex-wrap gap-6">
             {["Privacy Policy", "Terms of Service", "Contact Support", "Documentation"].map((label) => (
