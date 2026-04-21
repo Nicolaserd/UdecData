@@ -44,6 +44,8 @@ type ApiResponse = {
   };
   cobertura: CoberturaStats;
   categorias: string[];
+  unidadesRegionales: string[];
+  programasPorRegion: Record<string, string[]>;
   error?: string;
 };
 
@@ -87,6 +89,8 @@ const CATEGORIAS_LABELS: Record<string, string> = {
 
 export default function PronosticoEstudiantilPage() {
   const [categoriaActiva, setCategoriaActiva] = useState("Matriculados");
+  const [unidadRegional, setUnidadRegional] = useState("");
+  const [programaAcademico, setProgramaAcademico] = useState("");
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<"pregrado" | "posgrado" | null>(null);
@@ -99,10 +103,13 @@ export default function PronosticoEstudiantilPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  const fetchData = useCallback(async (cat: string) => {
+  const fetchData = useCallback(async (cat: string, ur: string, prog: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/pronostico?categoria=${encodeURIComponent(cat)}`);
+      const params = new URLSearchParams({ categoria: cat });
+      if (ur) params.set("unidad_regional", ur);
+      if (prog) params.set("programa_academico", prog);
+      const res = await fetch(`/api/pronostico?${params.toString()}`);
       const json = (await res.json()) as ApiResponse;
       setData(json);
     } catch {
@@ -113,8 +120,8 @@ export default function PronosticoEstudiantilPage() {
   }, []);
 
   useEffect(() => {
-    void fetchData(categoriaActiva);
-  }, [categoriaActiva, fetchData]);
+    void fetchData(categoriaActiva, unidadRegional, programaAcademico);
+  }, [categoriaActiva, unidadRegional, programaAcademico, fetchData]);
 
   const handleDownload = async (nivel: "pregrado" | "posgrado") => {
     setDownloading(nivel);
@@ -134,6 +141,12 @@ export default function PronosticoEstudiantilPage() {
       setDownloading(null);
     }
   };
+
+  const unidadesRegionales = data?.unidadesRegionales ?? [];
+  const programasPorRegion = data?.programasPorRegion ?? {};
+  const programasDisponibles = unidadRegional
+    ? (programasPorRegion[unidadRegional] ?? [])
+    : [];
 
   const chartData =
     data?.chartData.map((d) => ({
@@ -254,6 +267,46 @@ export default function PronosticoEstudiantilPage() {
       {/* ── Panel principal ───────────────────────────────────────────────────── */}
       <section className="relative z-20 mx-auto mb-12 max-w-7xl px-4 sm:-mt-12 sm:mb-20 sm:px-8">
         <div className="rounded-xl border border-[#bdcabb]/20 bg-white p-4 shadow-xl sm:p-8">
+
+          {/* Filtros dinámicos: Unidad Regional + Programa Académico */}
+          {unidadesRegionales.length > 0 && (
+            <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:gap-3">
+              <div className="flex flex-1 flex-col gap-1">
+                <label className="font-home-label text-[10px] font-bold uppercase tracking-widest text-[#6e7a6e]">
+                  Unidad Regional
+                </label>
+                <select
+                  value={unidadRegional}
+                  onChange={(e) => {
+                    setUnidadRegional(e.target.value);
+                    setProgramaAcademico("");
+                  }}
+                  className="w-full rounded-xl border border-[#bdcabb]/50 bg-white px-3 py-2 text-sm font-medium text-[#191c1d] shadow-sm focus:border-[#00682f] focus:outline-none focus:ring-2 focus:ring-[#00682f]/20"
+                >
+                  <option value="">Todas las regiones</option>
+                  {unidadesRegionales.map((ur) => (
+                    <option key={ur} value={ur}>{ur}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-1 flex-col gap-1">
+                <label className="font-home-label text-[10px] font-bold uppercase tracking-widest text-[#6e7a6e]">
+                  Programa Académico
+                </label>
+                <select
+                  value={programaAcademico}
+                  onChange={(e) => setProgramaAcademico(e.target.value)}
+                  disabled={!unidadRegional}
+                  className="w-full rounded-xl border border-[#bdcabb]/50 bg-white px-3 py-2 text-sm font-medium text-[#191c1d] shadow-sm focus:border-[#00682f] focus:outline-none focus:ring-2 focus:ring-[#00682f]/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <option value="">Todos los programas</option>
+                  {programasDisponibles.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Filtros */}
           <div className="mb-6 flex flex-col gap-3 sm:mb-10 sm:gap-6 md:flex-row md:items-center md:justify-between">

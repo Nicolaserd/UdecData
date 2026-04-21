@@ -140,6 +140,54 @@ export function calcularPronosticos(data: StudentRecord[]): ForecastRecord[] {
       }
     }
 
+    // Regla de suavizado: cada periodo pronosticado no puede variar más del ±15%
+    // respecto al valor previo del mismo tipo (histórico → forecast1 → forecast2).
+    const MAX_VAR = 0.15;
+    const ultimoPorPeriodo = new Map<string, number>();
+    for (const p of ["IPA", "IIPA"]) {
+      const hist = periodoMap.get(p) ?? [];
+      if (hist.length > 0) ultimoPorPeriodo.set(p, hist[hist.length - 1]);
+    }
+    for (const [anio, periodo] of forecastPeriods) {
+      const key = `${anio}-${periodo}`;
+      if (!forecastByPeriodo.has(key)) continue;
+      const ref = ultimoPorPeriodo.get(periodo);
+      if (ref === undefined) {
+        ultimoPorPeriodo.set(periodo, forecastByPeriodo.get(key)!);
+        continue;
+      }
+      const raw = forecastByPeriodo.get(key)!;
+      const clamped = Math.min(
+        Math.round(ref * (1 + MAX_VAR)),
+        Math.max(Math.round(ref * (1 - MAX_VAR)), raw)
+      );
+      forecastByPeriodo.set(key, clamped);
+      ultimoPorPeriodo.set(periodo, clamped);
+    }
+
+    // Regla: IPA casi siempre supera a IIPA dentro del mismo año.
+    // Si el pronóstico viola esa tendencia y la historia la confirma, corregir IPA.
+    const forecastYearSet = new Set(forecastPeriods.map(([anio]) => anio));
+    for (const anio of forecastYearSet) {
+      const ipaKey = `${anio}-IPA`;
+      const iipaKey = `${anio}-IIPA`;
+      if (!forecastByPeriodo.has(ipaKey) || !forecastByPeriodo.has(iipaKey)) continue;
+
+      const ipaForecast = forecastByPeriodo.get(ipaKey)!;
+      const iipaForecast = forecastByPeriodo.get(iipaKey)!;
+
+      if (ipaForecast < iipaForecast) {
+        const histIPA = periodoMap.get("IPA") ?? [];
+        const histIIPA = periodoMap.get("IIPA") ?? [];
+        const avgIPA = histIPA.length > 0 ? histIPA.reduce((a, b) => a + b, 0) / histIPA.length : 0;
+        const avgIIPA = histIIPA.length > 0 ? histIIPA.reduce((a, b) => a + b, 0) / histIIPA.length : 0;
+        // Corregir solo si el historial respalda la tendencia (o no hay historial IIPA)
+        if (histIIPA.length === 0 || avgIPA >= avgIIPA) {
+          forecastByPeriodo.set(ipaKey, iipaForecast);
+        }
+      }
+    }
+
     for (const [anio, periodo] of forecastPeriods) {
       const key = `${anio}-${periodo}`;
       if (forecastByPeriodo.has(key)) {

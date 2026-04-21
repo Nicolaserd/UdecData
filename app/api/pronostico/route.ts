@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const categoria = searchParams.get("categoria") ?? undefined;
+    const unidadRegional = searchParams.get("unidad_regional") ?? undefined;
+    const programaAcademico = searchParams.get("programa_academico") ?? undefined;
 
     const dbData = await prisma.estudiante.findMany({
       orderBy: [{ anio: "asc" }, { periodo: "asc" }],
@@ -35,16 +37,42 @@ export async function GET(req: NextRequest) {
         forecastPeriods: [],
         summary: { lastYear: null, growthPct: null, totalForecast: null },
         categorias: [],
+        unidadesRegionales: [],
+        programasPorRegion: {},
       });
     }
 
+    // Pronósticos calculados siempre sobre todos los datos (modelo global)
     const forecasts = calcularPronosticos(data);
-    const chartData = buildChartData(data, forecasts, categoria);
+
+    // Filtrar para el gráfico según los filtros seleccionados
+    const applyFilters = <T extends { unidad_regional: string; programa_academico: string }>(arr: T[]) =>
+      arr.filter(
+        (r) =>
+          (!unidadRegional || r.unidad_regional === unidadRegional) &&
+          (!programaAcademico || r.programa_academico === programaAcademico)
+      );
+
+    const dataFiltrada = applyFilters(data);
+    const forecastsFiltrados = applyFilters(forecasts);
+
+    const chartData = buildChartData(dataFiltrada, forecastsFiltrados, categoria);
     const forecastPeriods = getForecastPeriods(data);
 
     // Estadísticas resumen (sobre la categoría seleccionada o Matriculados por defecto)
     const catForSummary = categoria ?? "Matriculados";
-    const chartForSummary = buildChartData(data, forecasts, catForSummary);
+    const chartForSummary = buildChartData(dataFiltrada, forecastsFiltrados, catForSummary);
+
+    // Metadatos para filtros dinámicos (siempre desde todos los datos)
+    const unidadesRegionales = [...new Set(data.map((d) => d.unidad_regional))].sort();
+    const programasPorRegion: Record<string, string[]> = {};
+    for (const d of data) {
+      if (!programasPorRegion[d.unidad_regional]) programasPorRegion[d.unidad_regional] = [];
+      if (!programasPorRegion[d.unidad_regional].includes(d.programa_academico)) {
+        programasPorRegion[d.unidad_regional].push(d.programa_academico);
+      }
+    }
+    for (const k of Object.keys(programasPorRegion)) programasPorRegion[k].sort();
 
     const historicos = chartForSummary.filter((d) => d.tipo === "historico");
     const pronosticados = chartForSummary.filter((d) => d.tipo === "pronostico");
@@ -80,6 +108,8 @@ export async function GET(req: NextRequest) {
       },
       cobertura,
       categorias,
+      unidadesRegionales,
+      programasPorRegion,
     });
   } catch (error) {
     const message =

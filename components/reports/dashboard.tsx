@@ -148,6 +148,23 @@ export function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  // ── Opciones de filtros en cascada ────────────────────
+  const programasDisponibles = useMemo(() => {
+    if (!data) return [];
+    const base = filterRegion === ALL ? data.rows : data.rows.filter((r) => r.unidadRegional === filterRegion);
+    return [...new Set(base.map((r) => r.programa))].sort();
+  }, [data, filterRegion]);
+
+  const aniosDisponibles = useMemo(() => {
+    if (!data) return [];
+    const base = data.rows.filter((r) => {
+      if (filterRegion !== ALL && r.unidadRegional !== filterRegion) return false;
+      if (filterPrograma !== ALL && r.programa !== filterPrograma) return false;
+      return true;
+    });
+    return [...new Set(base.map((r) => r.anio))].sort((a, b) => a - b);
+  }, [data, filterRegion, filterPrograma]);
+
   // ── Filtered rows ─────────────────────────────────────
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -417,7 +434,11 @@ export function Dashboard() {
               </label>
               <select
                 value={filterRegion}
-                onChange={(e) => setFilterRegion(e.target.value)}
+                onChange={(e) => {
+                  setFilterRegion(e.target.value);
+                  setFilterPrograma(ALL);
+                  setFilterAnio(ALL);
+                }}
                 className={SELECT_CLASS}
               >
                 <option value={ALL}>Todas</option>
@@ -432,11 +453,14 @@ export function Dashboard() {
               </label>
               <select
                 value={filterPrograma}
-                onChange={(e) => setFilterPrograma(e.target.value)}
+                onChange={(e) => {
+                  setFilterPrograma(e.target.value);
+                  setFilterAnio(ALL);
+                }}
                 className={SELECT_CLASS}
               >
                 <option value={ALL}>Todos</option>
-                {data.programas.map((p) => (
+                {programasDisponibles.map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
@@ -451,7 +475,7 @@ export function Dashboard() {
                 className={SELECT_CLASS}
               >
                 <option value={ALL}>Todos</option>
-                {data.anios.map((a) => (
+                {aniosDisponibles.map((a) => (
                   <option key={a} value={String(a)}>{a}</option>
                 ))}
               </select>
