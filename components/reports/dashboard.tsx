@@ -785,7 +785,7 @@ export function Dashboard() {
                   <PolarRadiusAxis tick={{ fill: "#6e7a6e", fontSize: 10 }} tickFormatter={(v: number) => v.toLocaleString("es-CO")} />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
-                    formatter={(value: number, name: string) => [value.toLocaleString("es-CO"), name]}
+                    formatter={(value, name) => [Number(value ?? 0).toLocaleString("es-CO"), String(name)]}
                     labelFormatter={(label: string) => `Sede: ${label}`}
                   />
                   {CATEGORIAS.map((cat) => (
