@@ -333,7 +333,7 @@ export function buildSheetData(
   const nivelFilter = (r: StudentRecord | ForecastRecord) =>
     r.nivel.toLowerCase() === nivel || r.nivel_academico.toLowerCase().includes(nivel === "pregrado" ? "pregrado" : "posgrado") ||
     (nivel === "pregrado"
-      ? ["tecnico", "tecnólogo", "tecnologico", "tecnolog", "pregrado", "universitario"].some((n) =>
+      ? ["tecnico", "tecnolog", "pregrado", "universitario"].some((n) =>
           r.nivel_academico.toLowerCase().includes(n)
         )
       : ["posgrado", "especialización", "especializacion", "maestría", "maestria", "doctorado"].some(
@@ -405,7 +405,7 @@ export function buildSheetData(
 
 // ─── Estadísticas de cobertura ────────────────────────────────────────────────
 
-const NIVELES_PREGRADO = ["tecnico", "tecnólogo", "tecnologico", "pregrado", "universitario"];
+const NIVELES_PREGRADO = ["tecnico", "tecnolog", "pregrado", "universitario"];
 const NIVELES_POSGRADO = ["posgrado", "especialización", "especializacion", "maestría", "maestria", "doctorado"];
 
 function esPregrado(nivel_academico: string): boolean {
@@ -441,11 +441,11 @@ export function calcularCobertura(
   forecastPeriods: Array<[number, string]>
 ): CoberturaStats {
   // Deduplicar por (unidad_regional, programa_academico) — independiente de categoría/periodo
-  const programasUnicos = new Map<string, { nivel_academico: string; unidad_regional: string }>();
+  const programasUnicos = new Map<string, { nivel: string; nivel_academico: string; unidad_regional: string }>();
   for (const f of forecasts) {
     const k = `${f.unidad_regional}||${f.programa_academico}`;
     if (!programasUnicos.has(k)) {
-      programasUnicos.set(k, { nivel_academico: f.nivel_academico, unidad_regional: f.unidad_regional });
+      programasUnicos.set(k, { nivel: f.nivel, nivel_academico: f.nivel_academico, unidad_regional: f.unidad_regional });
     }
   }
 
@@ -454,11 +454,15 @@ export function calcularCobertura(
   const posgradoPrograms = new Set<string>();
   const posgradoRegiones = new Set<string>();
 
-  for (const [k, { nivel_academico, unidad_regional }] of programasUnicos) {
-    if (esPregrado(nivel_academico)) {
+  for (const [k, { nivel, nivel_academico, unidad_regional }] of programasUnicos) {
+    // El campo `nivel` de la BD tiene precedencia; las keywords son fallback
+    const nivelNorm = nivel.toLowerCase();
+    const isPre = nivelNorm.includes("pregrado") || esPregrado(nivel_academico);
+    const isPos = nivelNorm.includes("posgrado") || esPosgrado(nivel_academico);
+    if (isPre) {
       pregradoPrograms.add(k);
       pregradoRegiones.add(unidad_regional);
-    } else if (esPosgrado(nivel_academico)) {
+    } else if (isPos) {
       posgradoPrograms.add(k);
       posgradoRegiones.add(unidad_regional);
     }
