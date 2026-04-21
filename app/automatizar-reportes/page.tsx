@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { CloudUpload, LayoutDashboard } from "lucide-react";
+import { CloudUpload, LayoutDashboard, ShieldCheck } from "lucide-react";
 import {
   UploadForm,
   type UploadFormHandle,
@@ -40,11 +40,15 @@ export default function AutomatizarReportesPage() {
               <h1 className="font-home-display mb-4 text-3xl font-extrabold tracking-tight text-[#191c1d] sm:mb-6 sm:text-4xl md:text-5xl">
                 Automatizar Reportes para Boletín
               </h1>
-              <p className="text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
+              <p className="mb-4 text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
                 Transforme sus datos institucionales en informes precisos.
                 Cargue los archivos maestros para generar visualizaciones y
                 reportes automatizados para la Universidad de Cundinamarca.
               </p>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
+                <ShieldCheck className="size-3.5" />
+                Información estadística anonimizada
+              </span>
             </div>
 
             <div className="flex gap-4">

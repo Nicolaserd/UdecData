@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, GraduationCap, TrendingUp } from "lucide-react";
+import { Download, GraduationCap, ShieldCheck, TrendingUp } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -186,12 +186,16 @@ export default function PronosticoEstudiantilPage() {
                 Pronóstico de{" "}
                 <span className="text-[#00682f]">Población Estudiantil</span>
               </h1>
-              <p className="max-w-xl font-home-body text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
+              <p className="mb-4 max-w-xl font-home-body text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
                 Visualice las tendencias futuras del ecosistema académico.
                 Nuestra herramienta utiliza modelos de media ponderada para
                 anticipar el comportamiento de la matrícula, inscritos y
                 admitidos.
               </p>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
+                <ShieldCheck className="size-3.5" />
+                Información estadística anonimizada
+              </span>
             </div>
 
             {/* Tarjeta cobertura — desktop: columna derecha / mobile+tablet: debajo del texto */}

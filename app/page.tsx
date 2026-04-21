@@ -8,6 +8,7 @@ import {
   Headset,
   LineChart,
   PlusCircle,
+  ShieldCheck,
   Sparkles,
   TrendingUp,
   Users,
@@ -107,11 +108,16 @@ export default function HomePage() {
                   Automatizar Reportes para Boletín
                 </h3>
 
-                <p className="mb-8 flex-grow text-[#3e4a3e]">
+                <p className="mb-4 flex-grow text-[#3e4a3e]">
                   Procese sus fuentes de datos institucionales de manera
                   automática para la generación del boletín periódico. Ahorre
                   tiempo y garantice la integridad de los datos.
                 </p>
+
+                <span className="mb-6 inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
+                  <ShieldCheck className="size-3.5" />
+                  Información estadística anonimizada
+                </span>
 
                 <div className="flex items-center gap-4">
                   <Link
@@ -151,11 +157,16 @@ export default function HomePage() {
                   Pronóstico de Población Estudiantil
                 </h3>
 
-                <p className="mb-8 flex-grow text-[#3e4a3e]">
+                <p className="mb-4 flex-grow text-[#3e4a3e]">
                   Proyecte la evolución de la matrícula estudiantil a partir de
                   datos históricos y modelos de tendencia, apoyando la
                   planeación académica y la toma de decisiones estratégicas.
                 </p>
+
+                <span className="mb-6 inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
+                  <ShieldCheck className="size-3.5" />
+                  Información estadística anonimizada
+                </span>
 
                 <div className="flex items-center gap-4">
                   <Link
@@ -195,11 +206,16 @@ export default function HomePage() {
                   Encuentros Dialógicos
                 </h3>
 
-                <p className="mb-8 flex-grow text-[#3e4a3e]">
+                <p className="mb-4 flex-grow text-[#3e4a3e]">
                   Gestione y analice los encuentros dialógicos institucionales,
                   facilitando el seguimiento de participantes, temáticas y
                   compromisos derivados de los espacios de diálogo académico.
                 </p>
+
+                <span className="mb-6 inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
+                  <ShieldCheck className="size-3.5" />
+                  Información estadística anonimizada
+                </span>
 
                 <div className="flex items-center gap-4">
                   <Link

@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  ShieldCheck,
   Upload,
   Users,
   X,
@@ -969,12 +970,16 @@ export default function EncuentrosDialogicosPage() {
             Encuentros Dialógicos:{" "}
             <span className="text-[#00843d]">Espacios de Transformación</span>
           </h1>
-          <p className="max-w-3xl text-lg leading-relaxed text-[#3e4a3e]">
+          <p className="mb-4 max-w-3xl text-lg leading-relaxed text-[#3e4a3e]">
             Los Encuentros Dialógicos son la piedra angular de nuestra retroalimentación académica.
             Un proceso sistemático diseñado para fortalecer el diálogo entre la comunidad educativa,
             identificar brechas de aprendizaje y concertar planes de mejora continua que garanticen
             la excelencia en cada facultad.
           </p>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
+            <ShieldCheck className="size-3.5" />
+            Información estadística anonimizada
+          </span>
         </div>
       </section>
 
