@@ -10,7 +10,7 @@ function toBarItems(
   return totals
     .map(({ label, total }) => {
       const sat = satisfMap.get(label) ?? 0;
-      return { label, pct: total > 0 ? Math.round((sat / total) * 100) : 0, satisfechos: sat, total };
+      return { label, pct: total > 0 ? Math.ceil((sat / total) * 100) : 0, satisfechos: sat, total };
     })
     .sort((a, b) => b.pct - a.pct);
 }
@@ -78,13 +78,13 @@ export async function GET(request: NextRequest) {
       }),
       prisma.encuestaSatisfaccion.findMany({
         where,
-        select:   { respuesta_id: true },
-        distinct: ["respuesta_id"],
+        select:   { respuesta_id: true, anio: true, periodo_academico: true },
+        distinct: ["respuesta_id", "anio", "periodo_academico"],
       }),
     ]);
 
     const satisfaccionPct = totalConNivel > 0
-      ? Math.round((satisfechosTotal / totalConNivel) * 100)
+      ? Math.ceil((satisfechosTotal / totalConNivel) * 100)
       : null;
 
     // ── Filtros disponibles ───────────────────────────────────────────────────

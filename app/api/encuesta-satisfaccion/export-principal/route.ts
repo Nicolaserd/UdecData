@@ -9,15 +9,16 @@ export async function GET() {
     });
 
     const data = rows.map((r) => ({
-      "ID respuesta":         r.respuesta_id,
-      "Rol":                  r.rol,
-      "Sede":                 r.sede,
-      "Área":                 r.area,
+      "ID único":              `${r.respuesta_id}-${r.anio}-${r.periodo_academico}`,
+      "ID respuesta":          r.respuesta_id,
+      "Año":                   r.anio,
+      "Periodo académico":     r.periodo_academico,
+      "Rol":                   r.rol,
+      "Sede":                  r.sede,
+      "Área":                  r.area,
       "Nivel de satisfacción": r.nivel_satisfaccion ?? "",
       "Nivel numérico (1-5)":  r.nivel_numerico ?? "",
       "Comentarios":           r.comentarios ?? "",
-      "Año":                   r.anio,
-      "Periodo académico":     r.periodo_academico,
     }));
 
     const wb = XLSX.utils.book_new();
