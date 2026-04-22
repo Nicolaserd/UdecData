@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FileText,
   Headset,
+  Heart,
   LineChart,
   PlusCircle,
   ShieldCheck,
@@ -38,13 +39,14 @@ function timeAgo(date: Date | null): string {
 }
 
 export default async function HomePage() {
-  const [estudiantesRow, planesEstRow, planesDocRow, encEstRow, encDocRow] =
+  const [estudiantesRow, planesEstRow, planesDocRow, encEstRow, encDocRow, satisfaccionRow] =
     await Promise.all([
       prisma.estudiante.findFirst({ orderBy: { created_at: "desc" }, select: { created_at: true } }),
       prisma.planMejoramientoEstudiante.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
       prisma.planMejoramientoDocente.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
       prisma.encuestaEstudiante.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
       prisma.encuestaDocente.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
+      prisma.encuestaSatisfaccion.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
     ]);
 
   const estudiantesDate = estudiantesRow?.created_at ?? null;
@@ -58,6 +60,8 @@ export default async function HomePage() {
   const encuentrosDate = encuentrosDates.length
     ? new Date(Math.max(...encuentrosDates.map((d) => d.getTime())))
     : null;
+
+  const satisfaccionDate = satisfaccionRow?.updated_at ?? null;
   return (
     <main className="flex-1 bg-[#f8f9fa] font-home-body text-[#191c1d] pt-16">
       <NavBar activePage="home" />
@@ -264,6 +268,56 @@ export default async function HomePage() {
                   <span className="font-home-label inline-flex items-center gap-1 text-xs text-[#6e7a6e]">
                     <Clock3 className="size-3.5" />
                     {timeAgo(encuentrosDate)}
+                  </span>
+                </div>
+              </div>
+            </article>
+
+            <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
+              <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:h-auto sm:aspect-square md:w-1/3">
+                <img
+                  src={serviceImage}
+                  alt="Encuesta de satisfacción institucional con resultados visualizados."
+                  className="h-full w-full object-cover grayscale transition-all duration-500 group-hover:grayscale-0"
+                />
+              </div>
+
+              <div className="flex flex-1 flex-col">
+                <div className="mb-4 flex items-start justify-between">
+                  <Heart className="size-10 text-[#00682f]" />
+                  <span className="font-home-label rounded-[0.25rem] bg-[#2170e4]/10 px-2 py-1 text-[10px] font-bold text-[#0058be]">
+                    ACTIVO
+                  </span>
+                </div>
+
+                <h3 className="font-home-display mb-3 text-2xl font-bold text-[#191c1d]">
+                  Encuesta de Satisfacción
+                </h3>
+
+                <p className="mb-4 flex-grow text-[#3e4a3e]">
+                  Procese la Encuesta de Satisfacción Generación Siglo XXI por
+                  periodo académico. Cargue el Excel, indique el año y el PA
+                  (IPA o IIPA), y obtenga estadísticas de percepción por área,
+                  sede y rol.
+                </p>
+
+                <span className="mb-6 inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
+                  <ShieldCheck className="size-3.5" />
+                  Información estadística anonimizada
+                </span>
+
+                <div className="flex items-center gap-4">
+                  <Link
+                    href="/encuesta-satisfaccion"
+                    className="font-home-display inline-flex items-center gap-2 rounded-[0.25rem] bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-6 py-3 text-sm font-bold text-white transition-all"
+                  >
+                    Ir al servicio
+                    <ExternalLink className="size-4" />
+                  </Link>
+
+                  <span className="font-home-label inline-flex items-center gap-1 text-xs text-[#6e7a6e]">
+                    <Clock3 className="size-3.5" />
+                    {timeAgo(satisfaccionDate)}
                   </span>
                 </div>
               </div>

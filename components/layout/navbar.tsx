@@ -5,13 +5,14 @@ import { useState } from "react";
 import { Bell, ChevronDown, Menu, Settings, X } from "lucide-react";
 
 interface NavBarProps {
-  activePage?: "home" | "automatizar-reportes" | "pronostico-estudiantil" | "encuentros-dialogicos" | "agentes";
+  activePage?: "home" | "automatizar-reportes" | "pronostico-estudiantil" | "encuentros-dialogicos" | "encuesta-satisfaccion" | "agentes";
 }
 
 const SERVICES = [
   { href: "/automatizar-reportes", label: "Automatizar Reportes para Boletín" },
   { href: "/pronostico-estudiantil", label: "Pronóstico de Población Estudiantil" },
   { href: "/encuentros-dialogicos", label: "Encuentros Dialógicos" },
+  { href: "/encuesta-satisfaccion", label: "Encuesta de Satisfacción" },
   { href: "/agentes", label: "Agentes de IA" },
 ];
 
@@ -23,6 +24,7 @@ export function NavBar({ activePage }: NavBarProps) {
     activePage === "automatizar-reportes" ||
     activePage === "pronostico-estudiantil" ||
     activePage === "encuentros-dialogicos" ||
+    activePage === "encuesta-satisfaccion" ||
     activePage === "agentes";
 
   return (

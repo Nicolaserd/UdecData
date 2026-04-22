@@ -1,0 +1,129 @@
+0: ID
+1: Hora de inicio
+2: Hora de finalización
+3: Correo electrónico
+4: Nombre
+5: Digite por favor su correo electrónico: 
+6: Número de documento de identidad : por favor escriba únicamente los dígitos, sin puntos, guiones ni letras.
+7: Programa académico o dependencia a la que pertenece o perteneció
+8: ¿A cuál sede pertenece o perteneció?
+9: ¿Cuál es su relación con la Universidad de Cundinamarca?
+10: ¿Desea evaluar los trámites o servicios prestados por la Dirección de Investigación?
+11: Dirección de Investigación
+12: ¿Qué aspectos considera que debe mejorar esta dependencia?
+13: ¿Desea evaluar los trámites o servicios prestados por los procesos financieros?
+14: Procesos financieros
+15: ¿Por favor indique qué aspectos específicos considera que deben mejorarse en esta dependencia? (por ejemplo: tiempos de atención, canales de comunicación, personal, plataformas, etc.)
+16: ¿Desea evaluar los trámites o servicios prestados por el proceso de Talento Humano?
+17: Talento humano
+18: ¿Qué aspectos considera que debe mejorar esta dependencia?2
+19: ¿Desea evaluar los trámites o servicios prestados por el proceso de Admisiones y Registro?
+20: Satisfacción general con la oficina
+21: Grados y títulos académicos
+22: Proceso de inscripción, selección y admisión
+23: Solicitud de documentos (certificado de notas, constancia de estudios y verificaciones de título)
+24: ¿Qué tan satisfecho se encuentra con la respuesta proporcionada por la dependencia a su solicitud?
+25: ¿Qué tan satisfecho se encuentra con la confianza generada por los servidores que lo han atendido?
+26: ¿Qué tan satisfecho se encuentra con el tiempo de respuesta que tomó la dependencia o área que le atendió?
+27: ¿Qué tan satisfecho se encuentra con la información disponible en diversos canales como página web, correo institucional y teléfono, entre otros?
+28: ¿Qué tan satisfecho se encuentra con la facilidad para acceder a los servicios que presta la oficina y a la respuesta dada por la dependencia ante su trámite o solicitud?
+29: ¿Qué tan satisfecho se encuentra con la amabilidad y el respeto brindado por el servidor que lo atendió en los servicios y/o trámites realizados con esta dependencia?
+30: ¿Cuál es el nivel de satisfacción con los edificios y las instalaciones donde actualmente la dependencia presta los servicios y/o trámites que se requieren?
+31: ¿Cuál es el nivel de satisfacción con las plataformas con las que cuenta actualmente la dependencia para la prestación de los servicios y/o trámites que se requieren?
+32: ¿Qué aspectos considera que debe mejorar esta dependencia?3
+33: ¿Desea evaluar los trámites o servicios prestados por el proceso de Interacción Social Universitaria?
+34: Interacción Social Universitaria
+35: ¿Qué aspectos considera que debe mejorar esta dependencia?4
+36: ¿Desea evaluar los trámites o servicios prestados por la Dirección de Bienestar Universitario?
+37: Bienestar Universitario
+38: ¿Qué tan satisfecho se encuentra con la respuesta proporcionada por la dependencia a su solicitud?2
+39: ¿Qué tan satisfecho se encuentra con la confianza generada por los servidores que lo han atendido?2
+40: ¿Qué tan satisfecho se encuentra con el tiempo de respuesta que tomó la dependencia o área que le atendió?2
+41: ¿Qué tan satisfecho se encuentra con la información disponible en diversos canales como página web, correo institucional y teléfono, entre otros?2
+42: ¿Qué tan satisfecho se encuentra con la facilidad para acceder a los servicios que presta la oficina y a la respuesta dada por la dependencia ante su trámite o solicitud?2
+43: ¿Qué tan satisfecho se encuentra con la amabilidad y el respeto brindado por el servidor que lo atendió en los servicios y/o trámites realizados con esta dependencia?2
+44: ¿Cuál es el nivel de satisfacción con los edificios y las instalaciones donde actualmente la dependencia presta los servicios y/o trámites que se requieren?2
+45: ¿Cuál es el nivel de satisfacción con las plataformas con las que cuenta actualmente la dependencia para la prestación de los servicios y/o trámites que se requieren?2
+46: ¿Qué aspectos considera que debe mejorar esta dependencia?5
+47: ¿Desea evaluar los trámites o servicios prestados por el proceso Dialogando con el Mundo?
+48: Dialogando con el mundo
+49: ¿Qué aspectos considera que debe mejorar esta dependencia?6
+50: ¿Desea evaluar los trámites o servicios prestados por la Oficina de Graduados?
+51: Oficina de graduados
+52: ¿Qué aspectos considera que debe mejorar esta dependencia?7
+53: ¿Desea evaluar los trámites o servicios prestados por el proceso de Educación Virtual y a Distancia?
+54: Educación Virtual y a Distancia
+55: ¿Qué aspectos considera que debe mejorar esta dependencia?8
+56: ¿Desea evaluar los trámites o servicios prestados por el proceso de Atención al Ciudadano?
+57: Atención al Ciudadano
+58: ¿Qué aspectos considera que debe mejorar esta dependencia?9
+59: ¿Desea evaluar los trámites o servicios prestados por el proceso de Planeación Institucional?
+60: Planeación Institucional
+61: ¿Qué aspectos considera que debe mejorar esta dependencia?10
+62: ¿Desea evaluar los trámites o servicios prestados por la Oficina de Bienes y Servicios?
+63: Bienes y Servicios
+64: ¿Qué aspectos considera que debe mejorar esta dependencia?11
+65: ¿Desea evaluar las comunicaciones de la institución?
+66: Comunicaciones
+67: Considera que el tono de la comunicación que emplea la Oficina Asesora de Comunicaciones en sus diferentes canales y productos es: 
+68: ¿De los siguientes canales, cuál usa para enterarse de las actividades y de los temas de la Universidad de Cundinamarca? 
+69: ¿Consideras que el tono en el que están redactados los mensajes por redes sociales son cercanos y amigables?
+70: El tono emitido en los mensajes y contenidos de la oficina de comunicaciones te hacen sentir
+71: ¿Qué aspectos considera que debe mejorar la universidad en cuanto a sus comunicaciones?
+72: ¿Desea evaluar los trámites o servicios prestados por la Dirección de Autoevaluación y Acreditación?
+73: Autoevaluación y Acreditación
+74: ¿Qué aspectos considera que debe mejorar este proceso?
+75: ¿Desea evaluar los servicios prestados por los procesos de formación y aprendizaje?
+76: Formación y aprendizaje
+77: ¿Qué aspectos considera que debe mejorar este proceso?2
+78: ¿Desea evaluar la planta física de la universidad?
+79: Estructura física del área administrativa
+80: Proceso gradual de transformación a campus verde (dispositivos de ahorro y uso eficiente de agua, energía y papel)
+81: Señalización de emergencia en la Universidad
+82: Estructura física en las áreas comunes
+83: Implementación de los protocolos de bioseguridad
+84: Servicio de energía eléctrica
+85: Red hidrosanitaria (agua potable, grifería, baño)
+86: Estructura física del área académica
+87: Seguridad física
+88: Pintura de los espacios físicos
+89: Estructura física en las zonas de estacionamiento
+90: Disponibilidad de contenedores o dispositivos para almacenamiento temporal de residuos
+91: Zonas verdes
+92: ¿Qué mejoras cree que se deben hacer a la planta física de la Universidad?
+93: ¿Desea evaluar el CAD de la universidad?
+94: CAD
+95: ¿Qué mejoras cree que se deben hacer el  CAD?
+96: ¿Desea evaluar los Laboratorios?
+97: Laboratorios
+98: ¿Qué aspectos considera que se deben mejorar en los laboratorios? por favor especifique el nombre del laboratorio sobre el cual desea opinar.
+99: ¿Desea evaluar los Espacios Deportivos?
+100: Espacios Deportivos
+101: ¿Qué aspectos considera que se deben mejorar en los espacios deportivos?
+102: ¿Desea evaluar el servicio Biblioclic?
+103: ¿Qué tipo de servicio solicitó?
+104: Biblioclic
+105: ¿Qué aspectos considera que se deben mejorar el servicio Biblioclic?
+106: ¿Desea evaluar los servicios del Instituto de Posgrados?
+107: Biblioclic2
+108: ¿Qué aspectos considera se deben mejorar en los servicios del Instituto de Posgrados?
+109: Sede/seccional/extensión
+110: ¿Qué tan satisfecho se encuentra con la respuesta proporcionada por los servidores de la sede/seccional/extensión a su solicitud?
+111: ¿Qué tan satisfecho se encuentra con la confianza generada por los servidores de la sede/seccional/extensión que lo han atendido?
+112: ¿Qué tan satisfecho se encuentra con el tiempo de respuesta que tomaron los funcionarios en la sede/seccional/extensión para dar respuesta a su requerimiento?
+113: ¿Qué tan satisfecho se encuentra con la información disponible en diversos canales como página web, correo institucional y teléfono, entre otros?3
+114: ¿Qué tan satisfecho se encuentra con la facilidad para acceder a los servicios que presta la sede/seccional/extensión o a la respuesta dada ante su trámite o solicitud?
+115: ¿Qué tan satisfecho se encuentra con la amabilidad y el respeto brindado por los servidores de la sede/seccional/extensión que lo atendieron en los servicios y/o trámites realizados ?
+116: ¿Cuál es el nivel de satisfacción con los edificios y las instalaciones de la sede/seccional/extensión?
+117: ¿Cuál es el nivel de satisfacción con las plataformas con las que cuenta actualmente la sede/seccional/extensión para la prestación de los servicios y/o trámites que se requieren?
+118: ¿Qué aspectos considera que debe mejorar en general la sede/seccional/extensión de la cual usted forma parte?
+119: Universidad de Cundinamarca
+120: ¿Qué tan satisfecho se encuentra con la respuesta proporcionada por los servidores de la universidad a su solicitud?
+121: ¿Qué tan satisfecho se encuentra con la confianza generada por los servidores de la universidad que lo han atendido?
+122: ¿Qué tan satisfecho se encuentra con el tiempo de respuesta que tomó la universidad para dar respuesta a sus requerimientos?
+123: ¿Qué tan satisfecho se encuentra con la información disponible en diversos canales como página web, correo institucional y teléfono, entre otros?4
+124: ¿Qué tan satisfecho se encuentra con la facilidad para acceder a los servicios que presta la universidad o a la respuesta dada ante su trámite o solicitud?
+125: ¿Qué tan satisfecho se encuentra con la amabilidad y el respeto brindado por los servidores de la universidad que lo atendieron en los servicios y/o trámites realizados ?
+126: ¿Cuál es el nivel de satisfacción con los edificios y las instalaciones donde actualmente la universidad presta los servicios y/o trámites que se requieren?
+127: ¿Cuál es el nivel de satisfacción con las plataformas con las que cuenta actualmente la universidad para la prestación de los servicios y/o trámites que se requieren?
+128: ¿Qué aspectos considera que debe mejorar en general la UCundinamarca?

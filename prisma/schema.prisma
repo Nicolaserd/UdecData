@@ -131,3 +131,174 @@ model EncuestaDocente {
 
   @@map("encuestas_docentes")
 }
+
+model EncuestaSatisfaccion {
+  id                  Int      @id @default(autoincrement())
+  respuesta_id        Int
+  rol                 String
+  sede                String
+  area                String
+  nivel_satisfaccion  String?
+  nivel_numerico      Float?
+  comentarios         String?
+  anio                Int      @map("año")
+  periodo_academico   String
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@index([anio, periodo_academico])
+  @@index([sede])
+  @@index([area])
+  @@map("encuesta_satisfaccion_universidad_cundinamarca")
+}
+
+model SatisfaccionAdmisionesRegistro {
+  id                       Int      @id @default(autoincrement())
+  respuesta_id             Int
+  rol                      String
+  unidad_regional          String
+  anio                     Int      @map("año")
+  periodo_academico        String
+  satisfaccion_general     String?
+  grados_titulos           String?
+  proceso_inscripcion      String?
+  solicitud_documentos     String?
+  respuesta_solicitud      String?
+  confianza_servidores     String?
+  tiempo_respuesta         String?
+  info_canales             String?
+  facilidad_acceso         String?
+  amabilidad_respeto       String?
+  nivel_edificios          String?
+  nivel_plataformas        String?
+  comentarios              String?
+  created_at               DateTime @default(now())
+
+  @@map("satisfaccion_admisiones_registro")
+}
+
+model SatisfaccionBienestar {
+  id                       Int      @id @default(autoincrement())
+  respuesta_id             Int
+  rol                      String
+  unidad_regional          String
+  anio                     Int      @map("año")
+  periodo_academico        String
+  bienestar_universitario  String?
+  respuesta_solicitud      String?
+  confianza_servidores     String?
+  tiempo_respuesta         String?
+  info_canales             String?
+  facilidad_acceso         String?
+  amabilidad_respeto       String?
+  nivel_edificios          String?
+  nivel_plataformas        String?
+  comentarios              String?
+  created_at               DateTime @default(now())
+
+  @@map("satisfaccion_bienestar_universitario")
+}
+
+model SatisfaccionComunicaciones {
+  id                       Int      @id @default(autoincrement())
+  respuesta_id             Int
+  rol                      String
+  unidad_regional          String
+  anio                     Int      @map("año")
+  periodo_academico        String
+  comunicaciones           String?
+  tono_comunicacion        String?
+  canales_uso              String?
+  tono_redes               String?
+  tono_emocion             String?
+  comentarios              String?
+  created_at               DateTime @default(now())
+
+  @@map("satisfaccion_comunicaciones")
+}
+
+model SatisfaccionPlantaFisica {
+  id                            Int      @id @default(autoincrement())
+  respuesta_id                  Int
+  rol                           String
+  unidad_regional               String
+  anio                          Int      @map("año")
+  periodo_academico             String
+  estructura_administrativa     String?
+  campus_verde                  String?
+  senalizacion_emergencia       String?
+  estructura_areas_comunes      String?
+  protocolos_bioseguridad       String?
+  servicio_energia              String?
+  red_hidrosanitaria            String?
+  estructura_academica          String?
+  seguridad_fisica              String?
+  pintura_espacios              String?
+  estructura_estacionamiento    String?
+  contenedores_residuos         String?
+  zonas_verdes                  String?
+  promedio                      Float?
+  comentarios                   String?
+  created_at                    DateTime @default(now())
+
+  @@map("satisfaccion_planta_fisica")
+}
+
+model SatisfaccionBiblioclic {
+  id                       Int      @id @default(autoincrement())
+  respuesta_id             Int
+  rol                      String
+  unidad_regional          String
+  anio                     Int      @map("año")
+  periodo_academico        String
+  tipo_servicio            String?
+  biblioclic               String?
+  comentarios              String?
+  created_at               DateTime @default(now())
+
+  @@map("satisfaccion_biblioclic")
+}
+
+model SatisfaccionSede {
+  id                       Int      @id @default(autoincrement())
+  respuesta_id             Int
+  rol                      String
+  unidad_regional          String
+  anio                     Int      @map("año")
+  periodo_academico        String
+  sede_satisfaccion        String?
+  respuesta_solicitud      String?
+  confianza_servidores     String?
+  tiempo_respuesta         String?
+  info_canales             String?
+  facilidad_acceso         String?
+  amabilidad_respeto       String?
+  nivel_edificios          String?
+  nivel_plataformas        String?
+  comentarios              String?
+  created_at               DateTime @default(now())
+
+  @@map("satisfaccion_sede_seccional")
+}
+
+model SatisfaccionUniversidad {
+  id                       Int      @id @default(autoincrement())
+  respuesta_id             Int
+  rol                      String
+  unidad_regional          String
+  anio                     Int      @map("año")
+  periodo_academico        String
+  universidad              String?
+  respuesta_solicitud      String?
+  confianza_servidores     String?
+  tiempo_respuesta         String?
+  info_canales             String?
+  facilidad_acceso         String?
+  amabilidad_respeto       String?
+  nivel_edificios          String?
+  nivel_plataformas        String?
+  comentarios              String?
+  created_at               DateTime @default(now())
+
+  @@map("satisfaccion_universidad_cundinamarca")
+}
