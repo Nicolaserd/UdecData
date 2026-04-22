@@ -5,8 +5,10 @@ import {
   AlertCircle,
   BarChart2,
   CheckCircle2,
+  Cloud,
   Download,
   FileSpreadsheet,
+  FlaskConical,
   Heart,
   Loader2,
   ShieldCheck,
@@ -155,6 +157,12 @@ export default function EncuestaSatisfaccionPage() {
 
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+
+  // ── Sección "Descargar Resultados para Análisis"
+  const [wcAnio,    setWcAnio]    = useState<string>("");
+  const [wcPeriodo, setWcPeriodo] = useState<"" | "IPA" | "IIPA">("");
+  const [wcLoading, setWcLoading] = useState(false);
+  const [wcError,   setWcError]   = useState<string>("");
   const [filterAnio,    setFilterAnio]    = useState<string>("");
   const [filterPeriodo, setFilterPeriodo] = useState<string>("");
   const [filterSede,    setFilterSede]    = useState<string>("todas");
@@ -233,6 +241,33 @@ export default function EncuestaSatisfaccionPage() {
 
   const canSubmit = !!form.file && !!form.anio && !!form.periodo;
   const busy      = form.uploadState === "previewing" || form.uploadState === "uploading";
+
+  const downloadWordClouds = useCallback(async () => {
+    if (!wcAnio || !wcPeriodo) return;
+    setWcLoading(true);
+    setWcError("");
+    try {
+      const params = new URLSearchParams({ anio: wcAnio, periodo: wcPeriodo });
+      const res    = await fetch(`/api/encuesta-satisfaccion/wordclouds?${params}`);
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "" }));
+        throw new Error(error || `Error HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `nubes_de_palabras_${wcPeriodo}_${wcAnio}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setWcError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setWcLoading(false);
+    }
+  }, [wcAnio, wcPeriodo]);
 
   return (
     <main className="flex min-h-screen flex-col bg-[#f8f9fa] font-home-body text-[#191c1d] pt-16">
@@ -374,6 +409,84 @@ export default function EncuestaSatisfaccionPage() {
                 <Download className="size-4" /> Descargar BD completa
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Descargar resultados para análisis ── */}
+      <section className="bg-[#f8f9fa] px-6 py-12 sm:px-8 md:px-24">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-10 flex items-center gap-3">
+            <FlaskConical className="size-8 text-[#00682f]" />
+            <div>
+              <h2 className="font-[Manrope] text-2xl font-bold text-[#191c1d]">Descargar Resultados para Análisis</h2>
+              <p className="text-sm text-[#3e4a3e]">Reportes procesados para interpretación cualitativa y cuantitativa.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Card 1 — Nubes de palabras */}
+            <article className="relative flex flex-col rounded-2xl border border-[#bdcabb]/20 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:shadow-[0_20px_40px_rgba(0,104,47,0.12)]">
+              <div className="mb-5 flex items-start justify-between">
+                <div className="flex size-12 items-center justify-center rounded-xl bg-[#00682f]/10">
+                  <Cloud className="size-6 text-[#00682f]" />
+                </div>
+                <span className="rounded-full bg-[#7c4dff]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#7c4dff]">
+                  Análisis cualitativo
+                </span>
+              </div>
+
+              <h3 className="mb-2 font-[Manrope] text-xl font-extrabold leading-tight text-[#191c1d]">
+                Nubes de Palabras por Área
+              </h3>
+              <p className="mb-5 text-sm leading-relaxed text-[#3e4a3e]">
+                Genera una nube de palabras por cada área evaluada a partir de los comentarios.
+                Limpia automáticamente stopwords, respuestas vacías (&ldquo;na&rdquo;, &ldquo;ok&rdquo;) y ruido textual.
+                Se descarga un ZIP con un PNG por área.
+              </p>
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Año *</label>
+                  <select
+                    value={wcAnio}
+                    onChange={(e) => { setWcAnio(e.target.value); setWcError(""); }}
+                    className="rounded-lg border border-[#bdcabb] bg-white px-3 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]"
+                  >
+                    <option value="">Seleccione…</option>
+                    {stats?.filters.anios.map((a) => <option key={a} value={String(a)}>{a}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Periodo *</label>
+                  <select
+                    value={wcPeriodo}
+                    onChange={(e) => { setWcPeriodo(e.target.value as "" | "IPA" | "IIPA"); setWcError(""); }}
+                    className="rounded-lg border border-[#bdcabb] bg-white px-3 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]"
+                  >
+                    <option value="">Seleccione…</option>
+                    <option value="IPA">IPA</option>
+                    <option value="IIPA">IIPA</option>
+                  </select>
+                </div>
+              </div>
+
+              {wcError && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                  <span>{wcError}</span>
+                </div>
+              )}
+
+              <button type="button"
+                onClick={downloadWordClouds}
+                disabled={!wcAnio || !wcPeriodo || wcLoading}
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-3 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50">
+                {wcLoading
+                  ? <><Loader2 className="size-4 animate-spin" /> Generando nubes…</>
+                  : <><Download className="size-4" /> Descargar ZIP (PNG)</>}
+              </button>
+            </article>
           </div>
         </div>
       </section>
