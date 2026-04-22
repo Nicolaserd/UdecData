@@ -216,8 +216,7 @@ export default function EncuestaSatisfaccionPage() {
       await runPreview();
     }
     return valid;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [runPreview]);
 
   const runUpload = useCallback(async () => {
     if (!form.file) return;

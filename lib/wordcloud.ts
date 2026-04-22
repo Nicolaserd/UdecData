@@ -1,9 +1,39 @@
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
 import cloud from "d3-cloud";
+import path from "node:path";
+import fs from "node:fs";
 import type { Word } from "@/lib/parsers/wordcloud-text";
 
 // UCundinamarca brand palette
 const PALETTE = ["#007B3E", "#79C000", "#00A99D"];
+
+// ─── Font registration ───────────────────────────────────────────────────────
+// On Vercel/Linux serverless there are no system fonts, so @napi-rs/canvas
+// cannot measure/render text → blank PNGs. We ship a TTF in `public/fonts/`
+// and register it once before the first canvas operation.
+const FONT_FAMILY = "Geist";
+let fontRegistered = false;
+
+function ensureFont(): string {
+  if (fontRegistered) return FONT_FAMILY;
+  const candidates = [
+    path.join(process.cwd(), "public", "fonts", "Geist-Regular.ttf"),
+    path.join(process.cwd(), ".next", "server", "public", "fonts", "Geist-Regular.ttf"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      try {
+        GlobalFonts.registerFromPath(p, FONT_FAMILY);
+        fontRegistered = true;
+        return FONT_FAMILY;
+      } catch {
+        // ignore and try next
+      }
+    }
+  }
+  // Fallback (will likely render blank on Vercel but won't crash)
+  return "sans-serif";
+}
 
 // Minimum and maximum font sizes — scaled linearly against the top word count.
 const MIN_FONT = 16;
@@ -39,6 +69,7 @@ export async function generateWordCloudPng(
   };
 
   const seededRandom = mulberry32(42);
+  const font         = ensureFont();
 
   const placed: PlacedWord[] = await new Promise((resolve) => {
     cloud<cloud.Word>()
@@ -47,7 +78,7 @@ export async function generateWordCloudPng(
       .words(words.map((w) => ({ text: w.text, size: fontSize(w.value) })))
       .padding(4)
       .rotate(() => (seededRandom() > 0.7 ? 90 : 0))
-      .font("sans-serif")
+      .font(font)
       .fontSize((d) => d.size ?? MIN_FONT)
       .random(seededRandom)
       .on("end", (tags) => resolve(tags as PlacedWord[]))
@@ -60,7 +91,6 @@ export async function generateWordCloudPng(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
-  const font = pickFont();
   ctx.textAlign    = "center";
   ctx.textBaseline = "middle";
 
@@ -78,10 +108,4 @@ export async function generateWordCloudPng(
   });
 
   return canvas.toBuffer("image/png");
-}
-
-function pickFont(): string {
-  const preferred = ["Manrope", "Inter", "Helvetica", "Arial", "sans-serif"];
-  const available = new Set(GlobalFonts.families.map((f) => f.family));
-  return preferred.find((f) => available.has(f)) ?? "sans-serif";
 }
