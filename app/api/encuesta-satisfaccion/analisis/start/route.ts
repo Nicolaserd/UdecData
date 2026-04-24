@@ -21,21 +21,20 @@ export async function POST(request: NextRequest) {
     if (periodo !== "IPA" && periodo !== "IIPA")
       return NextResponse.json({ error: "Periodo debe ser IPA o IIPA" }, { status: 400 });
 
-    // 1. Traer comentarios del periodo
+    // 1. Traer TODAS las filas del periodo (con y sin comentarios) para no perder áreas
     const rows = await prisma.encuestaSatisfaccion.findMany({
-      where:  { anio, periodo_academico: periodo, comentarios: { not: null } },
+      where:  { anio, periodo_academico: periodo },
       select: { area: true, comentarios: true },
     });
 
     if (rows.length === 0)
-      return NextResponse.json({ error: `No hay comentarios para ${periodo} ${anio}` }, { status: 404 });
+      return NextResponse.json({ error: `No hay registros para ${periodo} ${anio}` }, { status: 404 });
 
-    // 2. Agrupar por área
+    // 2. Agrupar por área — cada área existente obtiene un bucket (posiblemente vacío)
     const byArea = new Map<string, string[]>();
     for (const r of rows) {
-      if (!r.comentarios) continue;
       const bucket = byArea.get(r.area) ?? [];
-      bucket.push(r.comentarios);
+      if (r.comentarios) bucket.push(r.comentarios);
       byArea.set(r.area, bucket);
     }
 
@@ -58,6 +57,12 @@ export async function POST(request: NextRequest) {
     };
     const chunkRows: ChunkRow[] = [];
     const areasInfo: { area: string; totalComentarios: number; totalChunks: number }[] = [];
+    let areasSinComentarios = 0;
+
+    const SIN_COMENTARIOS_PARRAFO =
+      "No se registraron comentarios abiertos para esta área en el periodo; " +
+      "por lo tanto no fue posible realizar un análisis cualitativo. " +
+      "Se sugiere revisar la cobertura del instrumento o los canales de retroalimentación para esta área.";
 
     for (const [area, raw] of byArea.entries()) {
       const limpios = cleanComentarios(raw);
@@ -71,19 +76,24 @@ export async function POST(request: NextRequest) {
         });
       });
 
-      // Crea el stub de consolidado por área (estado pendiente hasta que todos los chunks terminen)
+      // Stub de consolidado para TODA área existente — las que no tienen comentarios
+      // quedan ya "completado" con un párrafo por defecto para que el conteo refleje
+      // el total real de áreas del periodo.
       if (chunks.length > 0) {
         await prisma.satisfaccionAnalisisConsolidado.create({
           data: { anio, periodo_academico: periodo, area, estado: "pendiente" },
         });
+      } else {
+        await prisma.satisfaccionAnalisisConsolidado.create({
+          data: {
+            anio, periodo_academico: periodo, area,
+            estado:  "completado",
+            parrafo: SIN_COMENTARIOS_PARRAFO,
+          },
+        });
+        areasSinComentarios++;
       }
     }
-
-    if (chunkRows.length === 0)
-      return NextResponse.json(
-        { error: "No se encontraron comentarios significativos después de la limpieza" },
-        { status: 404 },
-      );
 
     // Inserción en tandas de 500
     const batchSize = 500;
@@ -108,6 +118,7 @@ export async function POST(request: NextRequest) {
       totalAreas:   areasInfo.length,
       totalChunks:  chunkRows.length,
       totalRespuestas: rows.length,
+      areasSinComentarios,
       areas:        areasInfo,
     });
   } catch (error) {

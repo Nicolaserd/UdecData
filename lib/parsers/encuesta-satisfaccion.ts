@@ -9,8 +9,13 @@ function stripAccents(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
+/**
+ * Normaliza una clave para comparación robusta.
+ * Importante: colapsa NBSP (U+00A0) y demás whitespace Unicode a un espacio
+ * regular — Microsoft Forms a veces exporta headers con NBSP incrustados.
+ */
 export function normKey(s: string): string {
-  return stripAccents(s.trim().toLowerCase());
+  return stripAccents(s.replace(/\s+/g, " ").trim().toLowerCase());
 }
 
 /** Normaliza todas las claves de una fila */

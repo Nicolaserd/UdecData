@@ -328,7 +328,12 @@ export default function EncuestaSatisfaccionPage() {
       const startRes  = await fetch("/api/encuesta-satisfaccion/analisis/start", { method: "POST", headers, body });
       const startJson = await startRes.json();
       if (!startRes.ok) throw new Error(startJson.error ?? "Error al iniciar");
-      setLlmProgress({ chunks: 0, total: startJson.totalChunks, consol: 0, consolTotal: startJson.totalAreas });
+      setLlmProgress({
+        chunks:      0,
+        total:       startJson.totalChunks,
+        consol:      startJson.areasSinComentarios ?? 0,
+        consolTotal: startJson.totalAreas,
+      });
 
       // 2. Process: iterar hasta completar
       setLlmStage("Analizando chunks con IA (Cerebras → Groq)…");
