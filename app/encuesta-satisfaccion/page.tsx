@@ -8,10 +8,13 @@ import {
   Cloud,
   Download,
   FileSpreadsheet,
+  FileText,
   FlaskConical,
   Heart,
   Loader2,
+  Sparkles,
   ShieldCheck,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -163,6 +166,19 @@ export default function EncuestaSatisfaccionPage() {
   const [wcPeriodo, setWcPeriodo] = useState<"" | "IPA" | "IIPA">("");
   const [wcLoading, setWcLoading] = useState(false);
   const [wcError,   setWcError]   = useState<string>("");
+
+  // ── LLM: extracción y consolidado de comentarios ──
+  const [llmAnio,    setLlmAnio]    = useState<string>("");
+  const [llmPeriodo, setLlmPeriodo] = useState<"" | "IPA" | "IIPA">("");
+  const [llmError,   setLlmError]   = useState<string>("");
+  const [llmBusy,    setLlmBusy]    = useState(false);
+  const [llmStage,   setLlmStage]   = useState<string>("");
+  const [llmProgress, setLlmProgress] = useState<{ chunks: number; total: number; consol: number; consolTotal: number }>({ chunks: 0, total: 0, consol: 0, consolTotal: 0 });
+  const [llmUrl,     setLlmUrl]     = useState<string>("");
+
+  // ── Reset (borrado manual con PIN) de las 3 tablas de análisis
+  const [resetPinOpen, setResetPinOpen] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string>("");
   const [filterAnio,    setFilterAnio]    = useState<string>("");
   const [filterPeriodo, setFilterPeriodo] = useState<string>("");
   const [filterSede,    setFilterSede]    = useState<string>("todas");
@@ -268,6 +284,136 @@ export default function EncuestaSatisfaccionPage() {
     }
   }, [wcAnio, wcPeriodo]);
 
+  const verifyResetPin = useCallback(async (pin: string): Promise<boolean> => {
+    setResetMessage("");
+    try {
+      const res = await fetch("/api/encuesta-satisfaccion/analisis/reset-all", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ pin }),
+      });
+      const json = await res.json();
+      if (res.status === 401) return false;          // PIN incorrecto → PinModal mostrará el error
+      if (!res.ok) {
+        setResetMessage(json.error ?? "Error al borrar datos");
+        setResetPinOpen(false);
+        return true;                                  // cierra modal; mostramos error debajo
+      }
+      const d = json.deleted;
+      setResetMessage(`Se eliminaron ${d.total} registros (chunks: ${d.chunks}, consolidados: ${d.consolidados}, informes: ${d.informes}).`);
+      setResetPinOpen(false);
+      setLlmUrl("");
+      setLlmError("");
+      setLlmProgress({ chunks: 0, total: 0, consol: 0, consolTotal: 0 });
+      setLlmStage("");
+      return true;
+    } catch (err) {
+      setResetMessage(err instanceof Error ? err.message : "Error desconocido");
+      setResetPinOpen(false);
+      return true;
+    }
+  }, []);
+
+  const generateLlmReport = useCallback(async () => {
+    if (!llmAnio || !llmPeriodo) return;
+    setLlmBusy(true);
+    setLlmError("");
+    setLlmUrl("");
+    const body = JSON.stringify({ anio: llmAnio, periodo: llmPeriodo });
+    const headers = { "Content-Type": "application/json" };
+
+    try {
+      // 1. Start: crear chunks
+      setLlmStage("Preparando chunks…");
+      const startRes  = await fetch("/api/encuesta-satisfaccion/analisis/start", { method: "POST", headers, body });
+      const startJson = await startRes.json();
+      if (!startRes.ok) throw new Error(startJson.error ?? "Error al iniciar");
+      setLlmProgress({ chunks: 0, total: startJson.totalChunks, consol: 0, consolTotal: startJson.totalAreas });
+
+      // 2. Process: iterar hasta completar
+      setLlmStage("Analizando chunks con IA (Cerebras → Groq)…");
+      {
+        let safety = 800;
+        let done = false;
+        let lastTerminal = -1;
+        let stagnantLoops = 0;
+        while (!done && safety-- > 0) {
+          const res  = await fetch("/api/encuesta-satisfaccion/analisis/process", { method: "POST", headers, body });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error ?? "Error procesando chunks");
+          const terminal = (json.counts.completado ?? 0) + (json.counts.error_final ?? 0);
+          setLlmProgress((p) => ({ ...p, chunks: terminal, total: json.counts.total }));
+          done = json.done;
+          if (terminal === lastTerminal) stagnantLoops++;
+          else { stagnantLoops = 0; lastTerminal = terminal; }
+          if (stagnantLoops >= 25) {
+            const extra = json.ultimoError ? ` · Último error: ${json.ultimoError}` : "";
+            throw new Error(`Sin progreso en los análisis — ${json.restantes} chunk(s) atascados.${extra}`);
+          }
+        }
+      }
+
+      // 3. Consolidate
+      setLlmStage("Consolidando por área…");
+      let consolidadosFinales = 0;
+      let consolErroresFinales = 0;
+      let consolUltimoError = "";
+      {
+        let safety = 200;
+        let done = false;
+        let lastTerminal = -1;
+        let stagnantLoops = 0;
+        while (!done && safety-- > 0) {
+          const res  = await fetch("/api/encuesta-satisfaccion/analisis/consolidate", { method: "POST", headers, body });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error ?? "Error consolidando");
+          const terminal = (json.counts.completado ?? 0) + (json.counts.error ?? 0);
+          setLlmProgress((p) => ({ ...p, consol: json.counts.completado, consolTotal: json.counts.total }));
+          done = json.done;
+          consolidadosFinales  = json.counts.completado ?? 0;
+          consolErroresFinales = json.counts.error      ?? 0;
+          if (json.ultimoError) consolUltimoError = json.ultimoError;
+          if (terminal === lastTerminal) stagnantLoops++;
+          else { stagnantLoops = 0; lastTerminal = terminal; }
+          if (stagnantLoops >= 15) break; // aborta el loop pero avanza con las que sí quedaron listas
+        }
+      }
+
+      // Si ninguna área quedó consolidada, no hay informe que generar
+      if (consolidadosFinales === 0) {
+        const tail = consolUltimoError ? ` · ${consolUltimoError}` : "";
+        throw new Error(`No se pudo consolidar ninguna área.${tail}`);
+      }
+
+      // 4. Generate docx (descarga binaria directa)
+      setLlmStage("Generando documento Word…");
+      const genRes = await fetch("/api/encuesta-satisfaccion/analisis/generate", { method: "POST", headers, body });
+      if (!genRes.ok) {
+        const j = await genRes.json().catch(() => ({ error: `HTTP ${genRes.status}` }));
+        throw new Error(j.error ?? "Error generando informe");
+      }
+
+      const blob     = await genRes.blob();
+      const filename = genRes.headers.get("X-Informe-Filename") ?? `informe_satisfaccion_${llmPeriodo}_${llmAnio}.docx`;
+      const href     = URL.createObjectURL(blob);
+
+      // Dispara la descarga inmediatamente
+      const a  = document.createElement("a");
+      a.href   = href;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setLlmUrl(href);
+      setLlmStage("Informe generado y descargado");
+    } catch (err) {
+      setLlmError(err instanceof Error ? err.message : "Error desconocido");
+      setLlmStage("");
+    } finally {
+      setLlmBusy(false);
+    }
+  }, [llmAnio, llmPeriodo]);
+
   return (
     <main className="flex min-h-screen flex-col bg-[#f8f9fa] font-home-body text-[#191c1d] pt-16">
       <NavBar />
@@ -276,6 +422,13 @@ export default function EncuestaSatisfaccionPage() {
         <PinModal
           onConfirm={verifyPin}
           onCancel={() => setPinOpen(false)}
+        />
+      )}
+
+      {resetPinOpen && (
+        <PinModal
+          onConfirm={verifyResetPin}
+          onCancel={() => setResetPinOpen(false)}
         />
       )}
 
@@ -484,6 +637,126 @@ export default function EncuestaSatisfaccionPage() {
                 {wcLoading
                   ? <><Loader2 className="size-4 animate-spin" /> Generando nubes…</>
                   : <><Download className="size-4" /> Descargar ZIP (PNG)</>}
+              </button>
+            </article>
+
+            {/* Card 2 — Informe LLM */}
+            <article className="relative flex flex-col rounded-2xl border border-[#bdcabb]/20 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:shadow-[0_20px_40px_rgba(0,104,47,0.12)]">
+              <div className="mb-5 flex items-start justify-between">
+                <div className="flex size-12 items-center justify-center rounded-xl bg-[#00682f]/10">
+                  <Sparkles className="size-6 text-[#00682f]" />
+                </div>
+                <span className="rounded-full bg-[#7c4dff]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#7c4dff]">
+                  Análisis con IA
+                </span>
+              </div>
+
+              <h3 className="mb-2 font-[Manrope] text-xl font-extrabold leading-tight text-[#191c1d]">
+                Informe Consolidado con IA
+              </h3>
+              <p className="mb-5 text-sm leading-relaxed text-[#3e4a3e]">
+                Analiza todos los comentarios por área usando IA (Cerebras con respaldo en Groq). Procesa en chunks,
+                consolida por área en un párrafo institucional y entrega un documento Word descargable.
+              </p>
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Año *</label>
+                  <select
+                    value={llmAnio}
+                    onChange={(e) => { setLlmAnio(e.target.value); setLlmError(""); }}
+                    disabled={llmBusy}
+                    className="rounded-lg border border-[#bdcabb] bg-white px-3 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] disabled:opacity-60"
+                  >
+                    <option value="">Seleccione…</option>
+                    {stats?.filters.anios.map((a) => <option key={a} value={String(a)}>{a}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Periodo *</label>
+                  <select
+                    value={llmPeriodo}
+                    onChange={(e) => { setLlmPeriodo(e.target.value as "" | "IPA" | "IIPA"); setLlmError(""); }}
+                    disabled={llmBusy}
+                    className="rounded-lg border border-[#bdcabb] bg-white px-3 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f] disabled:opacity-60"
+                  >
+                    <option value="">Seleccione…</option>
+                    <option value="IPA">IPA</option>
+                    <option value="IIPA">IIPA</option>
+                  </select>
+                </div>
+              </div>
+
+              {llmBusy && (
+                <div className="mb-3 rounded-lg bg-[#00682f]/5 p-3">
+                  <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#00682f]">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    {llmStage}
+                  </div>
+                  {llmProgress.total > 0 && (
+                    <div className="mb-1 flex items-center justify-between text-[10px] text-[#3e4a3e]">
+                      <span>Chunks: {llmProgress.chunks}/{llmProgress.total}</span>
+                      <span>{llmProgress.total > 0 ? Math.round((llmProgress.chunks / llmProgress.total) * 100) : 0}%</span>
+                    </div>
+                  )}
+                  {llmProgress.total > 0 && (
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#edeeef]">
+                      <div className="h-full bg-[#00682f] transition-all" style={{ width: `${llmProgress.total > 0 ? (llmProgress.chunks / llmProgress.total) * 100 : 0}%` }} />
+                    </div>
+                  )}
+                  {llmProgress.consolTotal > 0 && (
+                    <>
+                      <div className="mt-2 mb-1 flex items-center justify-between text-[10px] text-[#3e4a3e]">
+                        <span>Consolidados: {llmProgress.consol}/{llmProgress.consolTotal}</span>
+                        <span>{llmProgress.consolTotal > 0 ? Math.round((llmProgress.consol / llmProgress.consolTotal) * 100) : 0}%</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#edeeef]">
+                        <div className="h-full bg-[#0058be] transition-all" style={{ width: `${llmProgress.consolTotal > 0 ? (llmProgress.consol / llmProgress.consolTotal) * 100 : 0}%` }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {llmError && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                  <span>{llmError}</span>
+                </div>
+              )}
+
+              {llmUrl && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg bg-[#00682f]/10 p-3 text-xs text-[#00682f]">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+                  <span>Informe descargado. Si no apareció, <a href={llmUrl} download className="underline font-semibold">guardar de nuevo</a>.</span>
+                </div>
+              )}
+
+              <button type="button"
+                onClick={generateLlmReport}
+                disabled={!llmAnio || !llmPeriodo || llmBusy}
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-3 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50">
+                {llmBusy
+                  ? <><Loader2 className="size-4 animate-spin" /> Procesando…</>
+                  : <><FileText className="size-4" /> Generar informe (.docx)</>}
+              </button>
+
+              {resetMessage && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#00682f]/10 p-2.5 text-[11px] text-[#00682f]">
+                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{resetMessage}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => { setResetMessage(""); setResetPinOpen(true); }}
+                disabled={llmBusy}
+                className="mt-2 inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold text-[#c11c1c] transition-colors hover:text-[#7a1010] disabled:cursor-not-allowed disabled:opacity-50"
+                title="Limpiar los registros de análisis (chunks, consolidados e informes) si algo falló"
+              >
+                <Trash2 className="size-3.5" />
+                Borrar datos de análisis si algo falló
               </button>
             </article>
           </div>

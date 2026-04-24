@@ -281,6 +281,61 @@ model SatisfaccionSede {
   @@map("satisfaccion_sede_seccional")
 }
 
+model SatisfaccionAnalisisChunk {
+  id                Int      @id @default(autoincrement())
+  anio              Int      @map("año")
+  periodo_academico String
+  area              String
+  orden             Int
+  contenido         Json
+  total_comentarios Int
+  estado            String   @default("pendiente")
+  proveedor_usado   String?
+  intentos          Json     @default("{}")
+  resultado         String?
+  error             String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@unique([anio, periodo_academico, area, orden])
+  @@index([anio, periodo_academico, area])
+  @@index([estado])
+  @@map("satisfaccion_analisis_chunk")
+}
+
+model SatisfaccionAnalisisConsolidado {
+  id                Int      @id @default(autoincrement())
+  anio              Int      @map("año")
+  periodo_academico String
+  area              String
+  parrafo           String?
+  estado            String   @default("pendiente")
+  proveedor_usado   String?
+  error             String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@unique([anio, periodo_academico, area])
+  @@map("satisfaccion_analisis_consolidado")
+}
+
+model SatisfaccionAnalisisInforme {
+  id                Int      @id @default(autoincrement())
+  anio              Int      @map("año")
+  periodo_academico String
+  url               String?
+  filename          String?
+  estado            String   @default("pendiente")
+  total_areas       Int?
+  total_chunks      Int?
+  error             String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@unique([anio, periodo_academico])
+  @@map("satisfaccion_analisis_informe")
+}
+
 model SatisfaccionUniversidad {
   id                       Int      @id @default(autoincrement())
   respuesta_id             Int
