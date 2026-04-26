@@ -5,6 +5,7 @@ import {
   AlertCircle,
   BarChart2,
   CheckCircle2,
+  ClipboardCheck,
   Cloud,
   Download,
   FileSpreadsheet,
@@ -14,6 +15,7 @@ import {
   Loader2,
   Sparkles,
   ShieldCheck,
+  Table,
   Trash2,
   Upload,
   X,
@@ -167,6 +169,12 @@ export default function EncuestaSatisfaccionPage() {
   const [wcLoading, setWcLoading] = useState(false);
   const [wcError,   setWcError]   = useState<string>("");
 
+  // ── Tabla de satisfacción por grupo de interés (Excel)
+  const [grpAnio,    setGrpAnio]    = useState<string>("");
+  const [grpPeriodo, setGrpPeriodo] = useState<"" | "IPA" | "IIPA">("");
+  const [grpLoading, setGrpLoading] = useState(false);
+  const [grpError,   setGrpError]   = useState<string>("");
+
   // ── LLM: extracción y consolidado de comentarios ──
   const [llmAnio,    setLlmAnio]    = useState<string>("");
   const [llmPeriodo, setLlmPeriodo] = useState<"" | "IPA" | "IIPA">("");
@@ -283,6 +291,33 @@ export default function EncuestaSatisfaccionPage() {
       setWcLoading(false);
     }
   }, [wcAnio, wcPeriodo]);
+
+  const downloadGrupos = useCallback(async () => {
+    if (!grpAnio || !grpPeriodo) return;
+    setGrpLoading(true);
+    setGrpError("");
+    try {
+      const params = new URLSearchParams({ anio: grpAnio, periodo: grpPeriodo });
+      const res    = await fetch(`/api/encuesta-satisfaccion/satisfaccion-grupos?${params}`);
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "" }));
+        throw new Error(error || `Error HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `satisfaccion_grupos_${grpPeriodo}_${grpAnio}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setGrpError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setGrpLoading(false);
+    }
+  }, [grpAnio, grpPeriodo]);
 
   const verifyResetPin = useCallback(async (pin: string): Promise<boolean> => {
     setResetMessage("");
@@ -737,21 +772,22 @@ export default function EncuestaSatisfaccionPage() {
                 </div>
               )}
 
-              <button type="button"
-                onClick={generateLlmReport}
-                disabled={!llmAnio || !llmPeriodo || llmBusy}
-                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-3 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50">
-                {llmBusy
-                  ? <><Loader2 className="size-4 animate-spin" /> Procesando…</>
-                  : <><FileText className="size-4" /> Generar informe (.docx)</>}
-              </button>
-
               {resetMessage && (
                 <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#00682f]/10 p-2.5 text-[11px] text-[#00682f]">
                   <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
                   <span>{resetMessage}</span>
                 </div>
               )}
+
+              <a
+                href="/api/encuesta-satisfaccion/analisis/prompt-revision"
+                download="prompt_revision_informe_satisfaccion.md"
+                className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg border border-[#bdcabb] bg-white px-3 py-2 text-[11px] font-semibold text-[#00682f] transition-all hover:border-[#00682f] hover:bg-[#00682f]/5"
+                title="Descarga un prompt en Markdown para que un asistente de IA revise el informe contra las áreas oficiales del SGC"
+              >
+                <ClipboardCheck className="size-3.5" />
+                Prompt de revisión (.md)
+              </a>
 
               <button
                 type="button"
@@ -762,6 +798,79 @@ export default function EncuestaSatisfaccionPage() {
               >
                 <Trash2 className="size-3.5" />
                 Borrar datos de análisis si algo falló
+              </button>
+
+              <button type="button"
+                onClick={generateLlmReport}
+                disabled={!llmAnio || !llmPeriodo || llmBusy}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-3 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50">
+                {llmBusy
+                  ? <><Loader2 className="size-4 animate-spin" /> Procesando…</>
+                  : <><FileText className="size-4" /> Generar informe (.docx)</>}
+              </button>
+            </article>
+
+            {/* Card 3 — Satisfacción por grupo de interés (Excel) */}
+            <article className="relative flex flex-col rounded-2xl border border-[#bdcabb]/20 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:shadow-[0_20px_40px_rgba(0,104,47,0.12)]">
+              <div className="mb-5 flex items-start justify-between">
+                <div className="flex size-12 items-center justify-center rounded-xl bg-[#00682f]/10">
+                  <Table className="size-6 text-[#00682f]" />
+                </div>
+                <span className="rounded-full bg-[#0058be]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#0058be]">
+                  Análisis cuantitativo
+                </span>
+              </div>
+
+              <h3 className="mb-2 font-[Manrope] text-xl font-extrabold leading-tight text-[#191c1d]">
+                Satisfacción por Grupo de Interés
+              </h3>
+              <p className="mb-5 text-sm leading-relaxed text-[#3e4a3e]">
+                Genera, por cada área evaluada, una tabla con la distribución porcentual de niveles
+                (Muy insatisfecho → Muy satisfecho) por grupo de interés (Administrativo, Docente,
+                Estudiante, Graduado) y el nivel de satisfacción consolidado. Se respetan los grupos
+                que evalúan cada área según el documento institucional.
+              </p>
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Año *</label>
+                  <select
+                    value={grpAnio}
+                    onChange={(e) => { setGrpAnio(e.target.value); setGrpError(""); }}
+                    className="rounded-lg border border-[#bdcabb] bg-white px-3 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]"
+                  >
+                    <option value="">Seleccione…</option>
+                    {stats?.filters.anios.map((a) => <option key={a} value={String(a)}>{a}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#6e7a6e]">Periodo *</label>
+                  <select
+                    value={grpPeriodo}
+                    onChange={(e) => { setGrpPeriodo(e.target.value as "" | "IPA" | "IIPA"); setGrpError(""); }}
+                    className="rounded-lg border border-[#bdcabb] bg-white px-3 py-2 text-sm focus:border-[#00682f] focus:outline-none focus:ring-1 focus:ring-[#00682f]"
+                  >
+                    <option value="">Seleccione…</option>
+                    <option value="IPA">IPA</option>
+                    <option value="IIPA">IIPA</option>
+                  </select>
+                </div>
+              </div>
+
+              {grpError && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                  <span>{grpError}</span>
+                </div>
+              )}
+
+              <button type="button"
+                onClick={downloadGrupos}
+                disabled={!grpAnio || !grpPeriodo || grpLoading}
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-3 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50">
+                {grpLoading
+                  ? <><Loader2 className="size-4 animate-spin" /> Generando Excel…</>
+                  : <><Download className="size-4" /> Descargar Excel</>}
               </button>
             </article>
           </div>
