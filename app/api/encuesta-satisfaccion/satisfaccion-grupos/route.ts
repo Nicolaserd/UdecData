@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx-js-style";
 import { prisma } from "@/lib/prisma";
 import { normKey } from "@/lib/parsers/encuesta-satisfaccion";
+import { injectBarChart } from "@/lib/excel-chart";
 
 export const runtime     = "nodejs";
 export const maxDuration = 60;
@@ -45,7 +46,6 @@ const AREA_GRUPOS: Record<string, readonly Grupo[]> = {
   "instituto de posgrados":            ["Administrativo", "Docente", "Estudiante"],
 };
 
-// Orden a mostrar (mismo del documento). Si una área no está aquí, va al final.
 const AREA_ORDER = [
   "procesos financieros",
   "talento humano",
@@ -101,8 +101,8 @@ function normalizeRol(rol: string): Grupo | null {
 
 // ─── Estilos ─────────────────────────────────────────────────────────────────
 
-const COL_HEADER = "A9D08E";  // verde olivo (cabecera y columna "Nivel de satisfacción")
-const COL_TOTAL  = "E2EFDA";  // verde claro para fila "Total grupos"
+const COL_HEADER = "A9D08E";
+const COL_TOTAL  = "E2EFDA";
 const BORDER      = { style: "thin" as const, color: { rgb: "808080" } };
 const ALL_BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
 
@@ -160,6 +160,26 @@ const styleTotalHighlight: CellStyle = {
   border: ALL_BORDERS,
 };
 
+// ─── Estilos hoja "Resumen general" ──────────────────────────────────────────
+
+const styleChartTitle: CellStyle = {
+  font: { bold: true, sz: 14, color: { rgb: "1F3826" } },
+  alignment: { horizontal: "center", vertical: "center" },
+};
+
+const styleResumenAreaCell: CellStyle = {
+  font: { sz: 11, color: { rgb: "191C1D" } },
+  alignment: { horizontal: "left", vertical: "center" },
+  border: ALL_BORDERS,
+};
+
+const styleResumenPctCell: CellStyle = {
+  font: { bold: true, sz: 11, color: { rgb: "1F3826" } },
+  fill: { patternType: "solid", fgColor: { rgb: COL_HEADER } },
+  alignment: { horizontal: "center", vertical: "center" },
+  border: ALL_BORDERS,
+};
+
 // ─── Helpers de celdas ───────────────────────────────────────────────────────
 
 type RawCell =
@@ -171,6 +191,9 @@ type RawCell =
   | { kind: "totalLabel";   text: string }
   | { kind: "data";         value: number; highlight?: boolean }
   | { kind: "totalData";    value: number; highlight?: boolean }
+  | { kind: "chartTitle";   text: string }
+  | { kind: "resumenArea"; text: string }
+  | { kind: "resumenPct";  value: number }
   | null;
 
 function cellFor(raw: RawCell): XLSX.CellObject | null {
@@ -184,7 +207,32 @@ function cellFor(raw: RawCell): XLSX.CellObject | null {
     case "totalLabel": return { t: "s", v: raw.text, s: styleTotalLabel };
     case "data":       return { t: "n", v: raw.value, z: "0.00%", s: raw.highlight ? styleDataHighlight : styleData };
     case "totalData":  return { t: "n", v: raw.value, z: "0.00%", s: raw.highlight ? styleTotalHighlight : styleTotalData };
+    case "chartTitle": return { t: "s", v: raw.text, s: styleChartTitle };
+    case "resumenArea": return { t: "s", v: raw.text, s: styleResumenAreaCell };
+    case "resumenPct":  return { t: "n", v: raw.value, z: '0"%"', s: styleResumenPctCell };
   }
+}
+
+function gridToSheet(grid: RawCell[][], merges: XLSX.Range[], cols: XLSX.ColInfo[], minCols: number, rows?: XLSX.RowInfo[]): XLSX.WorkSheet {
+  const ws: XLSX.WorkSheet = {};
+  let maxR = 0, maxC = 0;
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r];
+    for (let c = 0; c < row.length; c++) {
+      const cell = cellFor(row[c]);
+      if (!cell) continue;
+      const addr = XLSX.utils.encode_cell({ r, c });
+      ws[addr] = cell;
+      if (r > maxR) maxR = r;
+      if (c > maxC) maxC = c;
+    }
+  }
+  if (maxC < minCols - 1) maxC = minCols - 1;
+  ws["!ref"]    = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: maxC } });
+  ws["!cols"]   = cols;
+  ws["!merges"] = merges;
+  if (rows) ws["!rows"] = rows;
+  return ws;
 }
 
 export async function GET(request: NextRequest) {
@@ -222,9 +270,10 @@ export async function GET(request: NextRequest) {
       byNivel.set(r.nivel_satisfaccion, (byNivel.get(r.nivel_satisfaccion) ?? 0) + 1);
     }
 
+    // ─── Hoja 1: Satisfacción por grupo ───────────────────────────────────────
     const grid: RawCell[][] = [];
     const merges: XLSX.Range[] = [];
-    const N_COLS = 1 + NIVELES.length + 1; // grupo + 5 niveles + nivel satisf
+    const N_COLS = 1 + NIVELES.length + 1;
 
     grid.push([{ kind: "title", text: `Tabla de satisfacción por grupo de interés — ${periodo} ${anio}` }]);
     merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: N_COLS - 1 } });
@@ -247,10 +296,12 @@ export async function GET(request: NextRequest) {
       { kind: "header", text: "Nivel de satisfacción" },
     ];
 
+    // Acumula nivel de satisfacción "Total grupos" por área para hoja 2
+    const totalSatPorArea: { area: string; pct: number }[] = [];
+
     for (const area of areasOrdenadas) {
       const areaRowIdx = grid.length;
-      const areaTitle: RawCell[] = [{ kind: "areaTitle", text: area }];
-      grid.push(areaTitle);
+      grid.push([{ kind: "areaTitle", text: area }]);
       merges.push({ s: { r: areaRowIdx, c: 0 }, e: { r: areaRowIdx, c: N_COLS - 1 } });
 
       grid.push([...headers]);
@@ -289,38 +340,76 @@ export async function GET(request: NextRequest) {
       }
       totalRow.push({ kind: "totalData", value: totalAll > 0 ? satTot / totalAll : 0, highlight: true });
       grid.push(totalRow);
-
       grid.push([null]);
+
+      // Aproximación al entero superior si hay decimales
+      const pctEntero = totalAll > 0 ? Math.ceil((satTot / totalAll) * 100) : 0;
+      if (totalAll > 0) totalSatPorArea.push({ area, pct: pctEntero });
     }
 
-    // Render hoja
-    const ws: XLSX.WorkSheet = {};
-    let maxR = 0, maxC = 0;
-    for (let r = 0; r < grid.length; r++) {
-      const row = grid[r];
-      for (let c = 0; c < row.length; c++) {
-        const cell = cellFor(row[c]);
-        if (!cell) continue;
-        const addr = XLSX.utils.encode_cell({ r, c });
-        ws[addr] = cell;
-        if (r > maxR) maxR = r;
-        if (c > maxC) maxC = c;
-      }
-    }
-    if (maxC < N_COLS - 1) maxC = N_COLS - 1;
-    ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: maxC } });
-    ws["!cols"] = [
+    const ws1 = gridToSheet(grid, merges, [
       { wch: 22 },
       { wch: 18 }, { wch: 16 }, { wch: 30 }, { wch: 16 }, { wch: 18 }, { wch: 22 },
-    ];
-    ws["!merges"] = merges;
+    ], N_COLS);
 
+    // ─── Hoja 2: Resumen general (tabla + chart nativo) ──────────────────────
+    // Layout:
+    //   A1     → título (merged A1:B1)
+    //   A3,B3  → headers "Área", "Nivel de satisfacción"
+    //   A4..N  → datos (ordenados desc por pct)
+    //   Chart anclado a la derecha referenciando esos rangos.
+    const grid2:   RawCell[][]  = [];
+    const merges2: XLSX.Range[] = [];
+
+    grid2.push([{ kind: "chartTitle", text: `Resumen general nivel de satisfacción — ${periodo} ${anio}` }]);
+    merges2.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } });
+
+    grid2.push([null]);
+
+    grid2.push([
+      { kind: "header", text: "Área" },
+      { kind: "header", text: "Nivel de satisfacción" },
+    ]);
+
+    const areasSorted = [...totalSatPorArea].sort((a, b) => b.pct - a.pct);
+    for (const { area, pct } of areasSorted) {
+      grid2.push([
+        { kind: "resumenArea", text: area },
+        { kind: "resumenPct",  value: pct },
+      ]);
+    }
+
+    const ws2 = gridToSheet(
+      grid2,
+      merges2,
+      [{ wch: 40 }, { wch: 22 }],
+      2,
+    );
+
+    // ─── Workbook ─────────────────────────────────────────────────────────────
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Satisfacción por grupos");
-    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-    const body   = new Uint8Array(buffer);
+    XLSX.utils.book_append_sheet(wb, ws1, "Satisfacción por grupos");
+    XLSX.utils.book_append_sheet(wb, ws2, "Resumen general");
 
-    return new NextResponse(body, {
+    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+
+    // Inyecta el chart nativo en la hoja 2 (sheet2.xml).
+    const lastRow1Based = 3 + areasSorted.length; // header en fila 3 → datos hasta 3+N
+    const body = areasSorted.length > 0
+      ? await injectBarChart(new Uint8Array(buffer), {
+          sheetIndex: 2,
+          sheetName:  "Resumen general",
+          catRange:   `$A$4:$A$${lastRow1Based}`,
+          valRange:   `$B$4:$B$${lastRow1Based}`,
+          serNameRef: "$B$3",
+          serName:    "Nivel de satisfacción",
+          title:      `Resumen general nivel de satisfacción — ${periodo} ${anio}`,
+          fromCol: 3,  fromRow: 1,
+          toCol:   18, toRow:   Math.max(28, 3 + areasSorted.length + 2),
+        })
+      : new Uint8Array(buffer);
+
+    return new NextResponse(new Uint8Array(body), {
       headers: {
         "Content-Type":        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="satisfaccion_grupos_${periodo}_${anio}.xlsx"`,
