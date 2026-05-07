@@ -1,8 +1,8 @@
-# UdecData - Portal de Inteligencia Academica
+# Portal Institucional - Automatizacion y Analitica Academica
 
-Aplicacion web para la Universidad de Cundinamarca que centraliza reportes
-academicos, analitica institucional, pronostico de poblacion estudiantil,
-gestion de Encuentros Dialogicos y agentes de IA para consulta y soporte.
+Aplicacion web institucional que centraliza reportes academicos, analitica
+institucional, pronostico de poblacion estudiantil, gestion de Encuentros
+Dialogicos y agentes de IA para consulta y soporte.
 
 El proyecto esta construido con Next.js App Router y usa PostgreSQL/Supabase
 como fuente principal de datos. El modulo de agentes de IA puede consultar la
