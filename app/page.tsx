@@ -170,9 +170,9 @@ export default async function HomePage() {
             <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
               <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:aspect-square sm:h-auto md:w-1/3">
                 <img
-                  src={serviceImage}
-                  alt="Visualización de datos académicos en una pantalla digital."
-                  className="h-full w-full object-cover grayscale transition-all duration-500 group-hover:grayscale-0"
+                  src="/home/reportes-boletin.png"
+                  alt="Diagrama del flujo de procesamiento de datos académicos para boletín."
+                  className="h-full w-full object-contain grayscale transition-all duration-500 group-hover:grayscale-0"
                 />
               </div>
 
@@ -238,9 +238,9 @@ export default async function HomePage() {
             <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
               <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:aspect-square sm:h-auto md:w-1/3">
                 <img
-                  src={serviceImage}
+                  src="/home/Pronóstico.png"
                   alt="Gráfico de tendencias con proyecciones de población estudiantil."
-                  className="h-full w-full object-cover grayscale transition-all duration-500 group-hover:grayscale-0"
+                  className="h-full w-full object-contain grayscale transition-all duration-500 group-hover:grayscale-0"
                 />
               </div>
 
@@ -305,9 +305,9 @@ export default async function HomePage() {
             <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
               <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:aspect-square sm:h-auto md:w-1/3">
                 <img
-                  src={serviceImage}
+                  src="/home/encuentrosdialogicos.png"
                   alt="Encuentros dialógicos entre personas en entornos académicos."
-                  className="h-full w-full object-cover grayscale transition-all duration-500 group-hover:grayscale-0"
+                  className="h-full w-full object-contain grayscale transition-all duration-500 group-hover:grayscale-0"
                 />
               </div>
 
@@ -373,9 +373,9 @@ export default async function HomePage() {
             <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
               <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:aspect-square sm:h-auto md:w-1/3">
                 <img
-                  src={serviceImage}
+                  src="/home/encuesta.png"
                   alt="Encuesta de satisfacción institucional con resultados visualizados."
-                  className="h-full w-full object-cover grayscale transition-all duration-500 group-hover:grayscale-0"
+                  className="h-full w-full object-contain grayscale transition-all duration-500 group-hover:grayscale-0"
                 />
               </div>
 
@@ -442,9 +442,9 @@ export default async function HomePage() {
             <article className="group flex flex-col items-center gap-8 rounded-[0.75rem] border border-[#bdcabb]/10 bg-white p-6 shadow-[0_20px_40px_rgba(0,104,47,0.06)] transition-all hover:-translate-y-1 sm:p-8 md:col-span-2 md:flex-row">
               <div className="h-48 w-full overflow-hidden rounded-[0.5rem] sm:aspect-square sm:h-auto md:w-1/3">
                 <img
-                  src={serviceImage}
+                  src="/home/robot.png"
                   alt="Agentes de inteligencia artificial para análisis institucional."
-                  className="h-full w-full object-cover grayscale transition-all duration-500 group-hover:grayscale-0"
+                  className="h-full w-full object-contain grayscale transition-all duration-500 group-hover:grayscale-0"
                 />
               </div>
 
