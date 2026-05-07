@@ -6,7 +6,7 @@ export function buildChunkPrompt(area: string, comentarios: string[]): ChatMessa
     {
       role: "system",
       content:
-        "Eres un analista cualitativo institucional de la Universidad de Cundinamarca. " +
+        "Eres un analista cualitativo institucional de la institución. " +
         "Analizas comentarios de encuestas de satisfacción y produces resúmenes objetivos, " +
         "claros y sintéticos, con redacción institucional en español. No inventes datos.",
     },
@@ -30,7 +30,7 @@ export function buildConsolidatePrompt(area: string, analisis: string[]): ChatMe
     {
       role: "system",
       content:
-        "Eres un analista cualitativo institucional de la Universidad de Cundinamarca. " +
+        "Eres un analista cualitativo institucional de la institución. " +
         "Consolidas análisis parciales en un único párrafo integrador con redacción institucional en español.",
     },
     {

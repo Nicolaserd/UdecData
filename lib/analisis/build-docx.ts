@@ -24,7 +24,7 @@ export async function buildInformeDocx(params: {
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      children:  [new TextRun({ text: `Universidad de Cundinamarca — Generación Siglo XXI`, italics: true })],
+      children:  [new TextRun({ text: `institución — Generación Siglo XXI`, italics: true })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,

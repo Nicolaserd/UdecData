@@ -116,7 +116,7 @@ export async function GET() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(universidad.map((r) => ({
       "ID respuesta": r.respuesta_id, "Rol": r.rol, "Unidad regional": r.unidad_regional,
       "Año": r.anio, "Periodo": r.periodo_academico,
-      "Universidad de Cundinamarca": r.universidad ?? "",
+      "institución": r.universidad ?? "",
       "Respuesta solicitud": r.respuesta_solicitud ?? "",
       "Confianza servidores": r.confianza_servidores ?? "",
       "Tiempo de respuesta": r.tiempo_respuesta ?? "",
@@ -126,7 +126,7 @@ export async function GET() {
       "Nivel edificios": r.nivel_edificios ?? "",
       "Nivel plataformas": r.nivel_plataformas ?? "",
       "Comentarios": r.comentarios ?? "",
-    }))), "Universidad de Cundinamarca");
+    }))), "institución");
 
     const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 

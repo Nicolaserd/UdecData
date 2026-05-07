@@ -401,7 +401,7 @@ Mantén TODAS tus capacidades, reglas y restricciones anteriores sin excepción.
 
 // FASE 1 — Plan: decide qué consultar, SIN SQL
 function getAnalistaPlanPrompt(): string {
-  return `Eres el planificador de consultas del Portal de Inteligencia Académica de la Universidad de Cundinamarca.
+  return `Eres el planificador de consultas del Portal de Inteligencia Académica de la institución.
 
 IMPORTANTE: Tienes conexión ACTIVA y en TIEMPO REAL a una base de datos PostgreSQL institucional.
 Cuando el usuario pregunta por cifras, datos, estadísticas o información académica, DEBES consultarla.
@@ -433,7 +433,7 @@ PLAN:
 
 // FASE 2.N — Genera UN solo bloque SQL para un ítem del plan
 function getAnalistaQueryPrompt(): string {
-  return `Eres un generador de consultas SQL para el Portal de Inteligencia Académica de la Universidad de Cundinamarca.
+  return `Eres un generador de consultas SQL para el Portal de Inteligencia Académica de la institución.
 
 ${DB_SCHEMA}
 
@@ -481,7 +481,7 @@ Sin explicaciones, sin puntuación, sin nada más.`;
 
 // FASE 3c — Mejora el plan usando el plan y resumen anteriores
 function getAnalistaMejorarPlanPrompt(): string {
-  return `Eres un planificador de análisis de datos para el Portal de Inteligencia Académica de la Universidad de Cundinamarca.
+  return `Eres un planificador de análisis de datos para el Portal de Inteligencia Académica de la institución.
 
 ${DB_SCHEMA}
 
@@ -503,7 +503,7 @@ PLAN:
 
 // PRE-CHECK — ¿Puedo responder sin consultar la BD?
 function getAnalistaPreCheckPrompt(): string {
-  return `Eres un asistente de análisis de datos del Portal de Inteligencia Académica de la Universidad de Cundinamarca.
+  return `Eres un asistente de análisis de datos del Portal de Inteligencia Académica de la institución.
 
 Recibirás una pregunta del usuario junto con el historial y resumen de conversación disponibles.
 Tu tarea: determinar si con ESA información de contexto puedes responder la pregunta SIN necesitar consultar la base de datos.
@@ -516,7 +516,7 @@ Sin explicaciones, sin puntuación adicional.`;
 
 // FASE 4 — Interpreta UN resultado de consulta usando el resumen como contexto
 function getAnalistaInterpretOnePrompt(marioMode = false): string {
-  const base = `Eres el Analista de Datos Académicos del Portal de Inteligencia Académica de la Universidad de Cundinamarca (UdeC).
+  const base = `Eres el Analista de Datos Académicos del Portal de Inteligencia Académica de la institución.
 
 Interpreta el resultado de la consulta en UNA sola oración o dos líneas máximo en español formal.
 
@@ -530,7 +530,7 @@ REGLAS:
 
 // FASE 5 — Párrafo introductorio que termina en "se presentan los resultados:"
 function getAnalistaIntroPrompt(marioMode = false): string {
-  const base = `Eres el Analista de Datos Académicos del Portal de Inteligencia Académica de la Universidad de Cundinamarca (UdeC).
+  const base = `Eres el Analista de Datos Académicos del Portal de Inteligencia Académica de la institución.
 
 Genera UN párrafo introductorio formal en español para presentar los resultados del análisis solicitado.
 
@@ -552,10 +552,10 @@ Para preguntas que no necesitan datos de la BD:
 - Da UN consejo gracioso relacionado con los datos académicos en tono Mario.
 - NUNCA inventes cifras. Sin SQL.`;
   }
-  return `Eres el Analista de Datos Académicos del Portal de Inteligencia Académica de la Universidad de Cundinamarca (UdeC).
+  return `Eres el Analista de Datos Académicos del Portal de Inteligencia Académica de la institución.
 
 CONTEXTO INSTITUCIONAL — úsalo cuando te pregunten por definiciones:
-- Primíparos: estudiantes que ingresan por PRIMERA VEZ a la Universidad de Cundinamarca. En la base de datos se identifican como categoria = 'Primiparos' en la tabla de estudiantes.
+- Primíparos: estudiantes que ingresan por PRIMERA VEZ a la institución. En la base de datos se identifican como categoria = 'Primiparos' en la tabla de estudiantes.
 - Matriculados: estudiantes activos en un semestre determinado.
 - Graduados: estudiantes que obtuvieron su título.
 - Inscritos: aspirantes registrados (aún no admitidos ni matriculados).
@@ -665,7 +665,7 @@ Solo una de las dos opciones. Sin texto adicional.`,
 }
 
 function getSoporteSystemPrompt(): string {
-  return `Eres el Agente de Soporte del Portal de Inteligencia Académica de la Universidad de Cundinamarca (UdeC).
+  return `Eres el Agente de Soporte del Portal de Inteligencia Académica de la institución.
 
 SERVICIOS DEL PORTAL:
 1. Dashboard de Estudiantes: visualización de matrículas, tendencias por programa, sede y período.

@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { NavBar } from "@/components/layout/navbar";
+import { Footer } from "@/components/layout/footer";
 import { PinModal } from "@/components/reports/pin-modal";
 
 type UploadState = "idle" | "previewing" | "uploading" | "success" | "error";
@@ -456,7 +457,7 @@ export default function EncuestaSatisfaccionPage() {
 
   return (
     <main className="flex min-h-screen flex-col bg-[#f8f9fa] font-home-body text-[#191c1d] pt-16">
-      <NavBar />
+      <NavBar activePage="encuesta-satisfaccion" />
 
       {pinOpen && (
         <PinModal
@@ -491,9 +492,7 @@ export default function EncuestaSatisfaccionPage() {
             <span className="text-[#00843d]">Voz de la Comunidad UCundinamarca</span>
           </h1>
           <p className="mb-4 max-w-3xl text-lg leading-relaxed text-[#3e4a3e]">
-            Procese y analice los resultados de la encuesta de satisfacción aplicada cada periodo
-            académico. Suba el archivo Excel, indique el año y periodo (IPA o IIPA), y obtenga
-            estadísticas por área, sede y rol de manera automatizada.
+            Módulo de ingesta y análisis estadístico de la Encuesta de Satisfacción Generación Siglo XXI. Parsea el archivo Excel mediante mapeo columnar contra un esquema predefinido, aplica agregación multidimensional por área, sede y rol (estudiante/docente) y calcula índices de percepción, distribuciones de respuesta y comparativas entre periodos IPA e IIPA. Los resultados se persisten en base de datos y se exponen a través de dashboards interactivos con filtros configurables, soportando exportación de resúmenes y detalle por dimensión para análisis institucional.
           </p>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
             <ShieldCheck className="size-3.5" />
@@ -972,16 +971,7 @@ export default function EncuestaSatisfaccionPage() {
         </div>
       </section>
 
-      <footer className="mt-auto w-full border-t border-neutral-200 bg-neutral-50 py-8 text-xs">
-        <div className="flex flex-col items-center justify-between gap-4 px-12 md:flex-row">
-          <p className="font-home-label text-neutral-500">Institutional Intelligence Unit.</p>
-          <div className="flex flex-wrap gap-6">
-            {["Privacy Policy", "Terms of Service", "Contact Support", "Documentation"].map((label) => (
-              <a key={label} href="#" className="font-home-label text-neutral-500 transition-opacity hover:opacity-80 hover:text-neutral-800">{label}</a>
-            ))}
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }

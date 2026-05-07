@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { NavBar } from "@/components/layout/navbar";
+import { Footer } from "@/components/layout/footer";
 
 // ─── Columnas requeridas ──────────────────────────────────────────────────────
 
@@ -971,10 +972,7 @@ export default function EncuentrosDialogicosPage() {
             <span className="text-[#00843d]">Espacios de Transformación</span>
           </h1>
           <p className="mb-4 max-w-3xl text-lg leading-relaxed text-[#3e4a3e]">
-            Los Encuentros Dialógicos son la piedra angular de nuestra retroalimentación académica.
-            Un proceso sistemático diseñado para fortalecer el diálogo entre la comunidad educativa,
-            identificar brechas de aprendizaje y concertar planes de mejora continua que garanticen
-            la excelencia en cada facultad.
+            Módulo de registro y consulta de encuentros dialógicos académicos estructurado sobre una base de datos relacional. Procesa archivos Excel validados contra esquemas de columnas definidos (CATEGORIA, SUBCATEGORIA, ACTIVIDAD, PROGRAMA, UNIDAD REGIONAL, entre otros), ejecuta operaciones de upsert por lotes y calcula tasas de cumplimiento e indicadores de efectividad por programa, facultad, unidad regional y periodo. Centraliza en una sola capa los planes de mejoramiento de estudiantes y docentes, eliminando la dispersión de información entre archivos independientes y facilitando el seguimiento trazable de compromisos por encuentro.
           </p>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
             <ShieldCheck className="size-3.5" />
@@ -1203,19 +1201,7 @@ export default function EncuentrosDialogicosPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="mt-auto w-full border-t border-neutral-200 bg-neutral-50 py-8 text-xs">
-        <div className="flex flex-col items-center justify-between gap-4 px-12 md:flex-row">
-          <p className="font-home-label text-neutral-500">
-            Institutional Intelligence Unit.
-          </p>
-          <div className="flex flex-wrap gap-6">
-            {["Privacy Policy", "Terms of Service", "Contact Support", "Documentation"].map((label) => (
-              <a key={label} href="#" className="font-home-label text-neutral-500 transition-opacity hover:opacity-80 hover:text-neutral-800">{label}</a>
-            ))}
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }

@@ -33,7 +33,7 @@ function buildPrompt(areasMd: string): string {
 
 ## 1. Rol
 
-Actúas como **revisor institucional de calidad** para la Universidad de Cundinamarca. Tu objetivo es validar que el **Informe Consolidado de la Encuesta de Satisfacción "Voz de la Comunidad UCundinamarca"** sea **coherente** con la naturaleza, el alcance y las funciones reales de cada área evaluada, según el **Sistema de Gestión de Calidad (SGC)** institucional.
+Actúas como **revisor institucional de calidad** para la institución. Tu objetivo es validar que el **Informe Consolidado de la Encuesta de Satisfacción "Voz de la Comunidad UCundinamarca"** sea **coherente** con la naturaleza, el alcance y las funciones reales de cada área evaluada, según el **Sistema de Gestión de Calidad (SGC)** institucional.
 
 No añades opiniones nuevas: tu trabajo es **contrastar el contenido del informe contra la descripción oficial de cada área** y reportar cualquier desalineación.
 

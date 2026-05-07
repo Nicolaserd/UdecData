@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import {
-  Send, Mic, Plus, BarChart2, Bot,
-  Paperclip, AlertCircle, Settings, Trash2, MessageSquare, Clock,
+  Send, Plus, BarChart2, Bot,
+  AlertCircle, Settings, Trash2, MessageSquare, Clock,
 } from "lucide-react";
 import SettingsModal, { MODELS } from "@/components/agentes/SettingsModal";
 import { NavBar } from "@/components/layout/navbar";
@@ -1019,9 +1019,6 @@ export default function AgentesPage() {
             {/* Input — en móvil se posiciona encima del bottom nav */}
             <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white/80 border-t border-[#bdcabb]/30 shrink-0">
               <div className="max-w-4xl mx-auto flex items-end gap-2 sm:gap-3 bg-[#edeeef] px-2 py-2 rounded-2xl shadow-inner border border-[#bdcabb]/20">
-                <button className="p-2 sm:p-2.5 text-slate-400 hover:text-[#00682f] transition-colors active:scale-90 shrink-0">
-                  <Paperclip size={18} />
-                </button>
                 <textarea
                   ref={textareaRef}
                   value={input}
@@ -1030,11 +1027,8 @@ export default function AgentesPage() {
                   placeholder={agent.placeholder}
                   rows={1}
                   disabled={loading}
-                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-slate-800 py-2 sm:py-2.5 px-1 resize-none max-h-32 min-h-10 text-sm font-['Inter'] placeholder:text-transparent lg:placeholder:text-slate-400 disabled:opacity-50"
+                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-slate-800 py-2 sm:py-2.5 px-3 resize-none max-h-32 min-h-10 text-sm font-['Inter'] placeholder:text-slate-400 disabled:opacity-50"
                 />
-                <button className="hidden sm:block p-2.5 text-slate-400 hover:text-[#00682f] transition-colors active:scale-90 shrink-0">
-                  <Mic size={18} />
-                </button>
                 <button
                   onClick={sendMessage}
                   disabled={!input.trim() || loading}

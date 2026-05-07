@@ -10,6 +10,7 @@ import {
 import { Dashboard } from "@/components/reports/dashboard";
 import { Spinner } from "@/components/ui/spinner";
 import { NavBar } from "@/components/layout/navbar";
+import { Footer } from "@/components/layout/footer";
 
 export default function AutomatizarReportesPage() {
   const uploadFormRef = useRef<UploadFormHandle>(null);
@@ -38,12 +39,14 @@ export default function AutomatizarReportesPage() {
                 Gestión Académica
               </span>
               <h1 className="font-home-display mb-4 text-3xl font-extrabold tracking-tight text-[#191c1d] sm:mb-6 sm:text-4xl md:text-5xl">
-                Automatizar Reportes para Boletín
+                Automatizar Reportes{" "}
+                <span className="text-[#00682f]">para Boletín</span>
               </h1>
               <p className="mb-4 text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
-                Transforme sus datos institucionales en informes precisos.
-                Cargue los archivos maestros para generar visualizaciones y
-                reportes automatizados para la Universidad de Cundinamarca.
+                El módulo recibe archivos Excel maestros (matrícula, planta docente, programas académicos) y aplica validación estructural contra esquemas de columnas definidos, normalización de tipos de dato, deduplicación de registros y consolidación en una capa de base de datos relacional. El pipeline de transformación genera salidas estadísticas desagregadas por periodo académico, nivel de formación, programa y unidad regional, listas para alimentar visualizaciones e indicadores del boletín institucional.
+              </p>
+              <p className="mb-4 text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
+                El flujo de procesamiento es secuencial: ingesta de archivos con validación MIME y de encabezados, coincidencia de columnas contra el esquema requerido, parseo y coerción de tipos, operaciones de upsert por lotes en la base de datos, y generación de vistas agregadas para consumo del dashboard. El sistema habilita el procesamiento únicamente cuando los archivos mínimos requeridos están cargados y validados, reduciendo errores de ejecución y garantizando consistencia en los datos de salida.
               </p>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
                 <ShieldCheck className="size-3.5" />
@@ -93,18 +96,7 @@ export default function AutomatizarReportesPage() {
         </div>
       </div>
 
-      <footer className="w-full border-t border-slate-200 bg-slate-50 px-4 py-8 sm:px-8 sm:py-12">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
-          <p className="text-sm text-[#3e4a3e]">
-            Institutional Intelligence Unit.
-          </p>
-          <div className="flex flex-wrap justify-center gap-6 md:justify-end">
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Privacy Policy</a>
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Institutional Data</a>
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Contact Support</a>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }

@@ -35,9 +35,9 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "UDEC - Automatización de Reportes",
+  title: "Portal Institucional",
   description:
-    "Plataforma de automatización de flujos de datos e informes para la Universidad de Cundinamarca",
+    "Plataforma de automatización de flujos de datos e informes para la institución",
 };
 
 export default function RootLayout({

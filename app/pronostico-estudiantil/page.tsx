@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { NavBar } from "@/components/layout/navbar";
+import { Footer } from "@/components/layout/footer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -187,10 +188,7 @@ export default function PronosticoEstudiantilPage() {
                 <span className="text-[#00682f]">Población Estudiantil</span>
               </h1>
               <p className="mb-4 max-w-xl font-home-body text-base leading-relaxed text-[#3e4a3e] sm:text-lg">
-                Visualice las tendencias futuras del ecosistema académico.
-                Nuestra herramienta utiliza modelos de media ponderada para
-                anticipar el comportamiento de la matrícula, inscritos y
-                admitidos.
+                Aplica modelos de proyección por media ponderada (WMA) sobre series históricas de matrícula extraídas de la base de datos institucional. El algoritmo calcula pronósticos para periodos académicos futuros (IPA/IIPA) desagregados por unidad regional, programa académico y categoría poblacional: matriculados, inscritos, admitidos y primíparos. Los resultados se renderizan como gráficas de series de tiempo con distinción visual entre datos históricos y proyectados, con filtros configurables por programa y sede.
               </p>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00682f]/10 px-3 py-1.5 text-xs font-semibold text-[#00682f]">
                 <ShieldCheck className="size-3.5" />
@@ -269,7 +267,7 @@ export default function PronosticoEstudiantilPage() {
       </header>
 
       {/* ── Panel principal ───────────────────────────────────────────────────── */}
-      <section className="relative z-20 mx-auto mb-12 max-w-7xl px-4 sm:-mt-12 sm:mb-20 sm:px-8">
+      <section className="relative z-20 mx-auto mb-12 mt-8 max-w-7xl px-4 sm:mb-20 sm:mt-12 sm:px-8">
         <div className="rounded-xl border border-[#bdcabb]/20 bg-white p-4 shadow-xl sm:p-8">
 
           {/* Filtros dinámicos: Unidad Regional + Programa Académico */}
@@ -598,19 +596,7 @@ export default function PronosticoEstudiantilPage() {
         </div>
       </section>
 
-      {/* ── Footer ───────────────────────────────────────────────────────────── */}
-      <footer className="mt-auto w-full border-t border-slate-200 bg-slate-50 px-4 py-8 sm:px-8 sm:py-12">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
-          <p className="text-sm text-[#3e4a3e]">
-            Institutional Intelligence Unit.
-          </p>
-          <div className="flex flex-wrap justify-center gap-6 md:justify-end">
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Privacy Policy</a>
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Institutional Data</a>
-            <a href="#" className="text-sm text-[#3e4a3e] transition-all hover:text-[#00682f]">Contact Support</a>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }
