@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Eye, EyeOff, KeyRound, Loader2, X } from "lucide-react";
 
 interface PinModalProps {
@@ -13,10 +14,17 @@ export function PinModal({ onConfirm, onCancel }: PinModalProps) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     inputRef.current?.focus();
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,9 +49,11 @@ export function PinModal({ onConfirm, onCancel }: PinModalProps) {
     if (e.key === "Escape") onCancel();
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onKeyDown={handleKeyDown}
     >
       <div className="relative w-full max-w-sm rounded-2xl border border-[#bdcabb]/30 bg-white p-8 shadow-2xl">
@@ -123,6 +133,7 @@ export function PinModal({ onConfirm, onCancel }: PinModalProps) {
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

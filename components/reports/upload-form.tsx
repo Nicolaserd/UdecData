@@ -174,7 +174,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
     const readAsCSV = async (file: File): Promise<string> => {
       const ext = file.name.toLowerCase().split(".").pop() ?? "";
       if (ext === "csv" || ext === "txt") return await file.text();
-      const { default: XLSX } = await import("xlsx");
+      const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -260,7 +260,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
           setXlsxBlob(blob);
           setStats({ totalProcessed, totalAggregated, supabaseSaved, savedCount, skippedCount });
 
-          const { default: XLSX } = await import("xlsx");
+          const XLSX = await import("xlsx");
           const buffer = await blob.arrayBuffer();
           const workbook = XLSX.read(buffer, { type: "array" });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];

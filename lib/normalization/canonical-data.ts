@@ -29,7 +29,7 @@ export const CANONICAL_PROGRAMS: string[] = [
   "Licenciatura en Ciencias Sociales",
   "Licenciatura en Educación Básica con Énfasis en Ciencias Sociales",
   "Licenciatura en Matemáticas",
-  "Licenciatura en Educación Física, Recreación y Deportes",
+  "Licenciatura en Educación Física",
   "Maestría en Ciencias Agrarias con Énfasis en Hortifruticultura",
   "Música",
   "Medicina Veterinaria y Zootecnia",
@@ -40,7 +40,6 @@ export const CANONICAL_PROGRAMS: string[] = [
   "Zootecnia",
   "Especialización en Gerencia para el Desarrollo Organizacional",
   "Especialización en Gestión de Sistemas de Información Gerencial",
-  "Licenciatura en Educación Básica con Énfasis en Educación Física, Recreación y Deportes",
   "Maestría en Ciencias Ambientales",
   "Maestría en Educación",
   "Administración Agropecuaria",
@@ -79,6 +78,16 @@ export const CANONICAL_UNIDADES: string[] = [
 // This handles "Villa de San Diego de Ubaté" → "Ubaté" which fuzzy alone can't resolve
 export const UNIDAD_ALIASES: Record<string, string> = {
   "VILLA DE SAN DIEGO DE UBATE": "Ubaté",
+};
+
+// Programa aliases: substring-match (normalized: accent-stripped, uppercase, single-spaced).
+// Use when several legacy/variant names must collapse to a single canonical that fuzzy alone
+// can't reliably resolve (e.g. the canonical is much shorter than the input variants).
+export const PROGRAM_ALIASES: Record<string, string> = {
+  "LICENCIATURA EN EDUCACION FISICA RECREACION Y DEPORTES":
+    "Licenciatura en Educación Física",
+  "LICENCIATURA EN EDUCACION BASICA CON ENFASIS EN EDUCACION FISICA":
+    "Licenciatura en Educación Física",
 };
 
 // Rules to resolve Nivel and Nivel Académico from program name

@@ -88,7 +88,8 @@ testProg("Title case trailing space", "Ingeniería Topográfica y Geomática ", 
 testProg("Upper", "LICENCIATURA EN CIENCIAS SOCIALES", "Licenciatura en Ciencias Sociales");
 testProg("Upper no accent", "LICENCIATURA EN EDUCACION BASICA CON ENFASIS EN CIENCIAS SOCIALES", "Licenciatura en Educación Básica con Énfasis en Ciencias Sociales");
 testProg("Upper no accent", "LICENCIATURA EN MATEMATICAS", "Licenciatura en Matemáticas");
-testProg("Title case trailing space", "Licenciatura en Educación Física, Recreación y Deportes ", "Licenciatura en Educación Física, Recreación y Deportes");
+testProg("Title case trailing space", "Licenciatura en Educación Física, Recreación y Deportes ", "Licenciatura en Educación Física");
+testProg("Long Ed. Básica EF variant", "Licenciatura en Educación Básica con Énfasis en Educación Física, Recreación y Deportes", "Licenciatura en Educación Física");
 testProg("Upper with accents", "MAESTRÍA EN CIENCIAS AGRARÍAS CON ÉNFASIS EN HORTIFRUTICULTURA", "Maestría en Ciencias Agrarias con Énfasis en Hortifruticultura");
 testProg("Upper no accent", "MUSICA", "Música");
 testProg("Title case trailing space", "Medicina Veterinaria y Zootecnia ", "Medicina Veterinaria y Zootecnia");
