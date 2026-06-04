@@ -7,27 +7,45 @@ import type { Word } from "@/lib/parsers/wordcloud-text";
 // UCundinamarca brand palette
 const PALETTE = ["#007B3E", "#79C000", "#00A99D"];
 
+// Color aleatorio (pero estable por palabra) dentro de la paleta UDEC: cada
+// palabra recibe siempre el mismo color vía un hash FNV-1a de su texto, lo que
+// da una distribución variada/aleatoria a la vista y reproducible en producción.
+function colorForWord(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return PALETTE[(h >>> 0) % PALETTE.length];
+}
+
 // ─── Font registration ───────────────────────────────────────────────────────
 // On Vercel/Linux serverless there are no system fonts, so @napi-rs/canvas
-// cannot measure/render text → blank PNGs. We ship a TTF in `public/fonts/`
-// and register it once before the first canvas operation.
-const FONT_FAMILY = "Geist";
-let fontRegistered = false;
+// cannot measure/render text → blank PNGs. We ship the TTFs in `public/fonts/`
+// and register one once before the first canvas operation. Poppins (SemiBold)
+// es la principal por su mejor diseño para nubes; Geist queda como respaldo.
+const FONTS = [
+  { family: "Poppins", file: "Poppins-SemiBold.ttf" },
+  { family: "Geist",   file: "Geist-Regular.ttf" },
+];
+let registeredFamily: string | null = null;
 
 function ensureFont(): string {
-  if (fontRegistered) return FONT_FAMILY;
-  const candidates = [
-    path.join(process.cwd(), "public", "fonts", "Geist-Regular.ttf"),
-    path.join(process.cwd(), ".next", "server", "public", "fonts", "Geist-Regular.ttf"),
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) {
-      try {
-        GlobalFonts.registerFromPath(p, FONT_FAMILY);
-        fontRegistered = true;
-        return FONT_FAMILY;
-      } catch {
-        // ignore and try next
+  if (registeredFamily) return registeredFamily;
+  for (const f of FONTS) {
+    const candidates = [
+      path.join(process.cwd(), "public", "fonts", f.file),
+      path.join(process.cwd(), ".next", "server", "public", "fonts", f.file),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        try {
+          GlobalFonts.registerFromPath(p, f.family);
+          registeredFamily = f.family;
+          return f.family;
+        } catch {
+          // ignore and try next
+        }
       }
     }
   }
@@ -36,8 +54,10 @@ function ensureFont(): string {
 }
 
 // Minimum and maximum font sizes — scaled linearly against the top word count.
-const MIN_FONT = 16;
-const MAX_FONT = 96;
+// Con todas las palabras en horizontal, un tope algo menor mejora el empaquetado
+// (caben más palabras y queda menos espacio vacío).
+const MIN_FONT = 18;
+const MAX_FONT = 82;
 
 // Deterministic PRNG (mulberry32) so the same input produces the same output.
 function mulberry32(seed: number): () => number {
@@ -76,9 +96,10 @@ export async function generateWordCloudPng(
       .size([width, height])
       .canvas(() => createCanvas(1, 1) as unknown as HTMLCanvasElement)
       .words(words.map((w) => ({ text: w.text, size: fontSize(w.value) })))
-      .padding(4)
-      .rotate(() => (seededRandom() > 0.7 ? 90 : 0))
+      .padding(6)
+      .rotate(() => 0)            // todas las palabras en horizontal
       .font(font)
+      .fontWeight("normal")      // mismo peso que el render → sin solapamientos
       .fontSize((d) => d.size ?? MIN_FONT)
       .random(seededRandom)
       .on("end", (tags) => resolve(tags as PlacedWord[]))
@@ -97,12 +118,13 @@ export async function generateWordCloudPng(
   const cx = width / 2;
   const cy = height / 2;
 
-  placed.forEach((w, i) => {
+  placed.forEach((w) => {
     ctx.save();
     ctx.translate(cx + w.x, cy + w.y);
-    if (w.rotate) ctx.rotate((w.rotate * Math.PI) / 180);
-    ctx.fillStyle = PALETTE[i % PALETTE.length];
-    ctx.font = `bold ${w.size}px ${font}`;
+    ctx.fillStyle = colorForWord(w.text);
+    // Sin "bold": la cara registrada (Poppins SemiBold) ya tiene peso, y el peso
+    // del render coincide con el que mide d3-cloud → no hay solapamientos.
+    ctx.font = `${w.size}px ${font}`;
     ctx.fillText(w.text, 0, 0);
     ctx.restore();
   });
