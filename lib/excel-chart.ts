@@ -1,9 +1,13 @@
 /**
- * Inyección de un chart nativo de Excel en un .xlsx ya generado.
+ * Inyección de charts nativos de Excel en un .xlsx ya generado.
  *
  * SheetJS Community / xlsx-js-style no soportan charts. Esta utilidad abre el
  * archivo con JSZip, escribe los XML de chart + drawing + rels y registra los
  * tipos en [Content_Types].xml y la relación en xl/worksheets/_rels/sheetN.xml.rels.
+ *
+ * Soporta múltiples charts en el mismo libro vía `chartId` (cada uno usa sus
+ * propios chart{id}.xml / drawing{id}.xml), y dirección de barras `bar`
+ * (horizontal) o `col` (columnas verticales).
  */
 import JSZip from "jszip";
 
@@ -12,9 +16,9 @@ export type BarChartOpts = {
   sheetIndex: number;
   /** Nombre del worksheet (para los rangos). */
   sheetName:  string;
-  /** Rango de categorías (eje Y) — formato A1, ej. "$A$4:$A$25" */
+  /** Rango de categorías — formato A1, ej. "$A$4:$A$25" */
   catRange:   string;
-  /** Rango de valores (eje X) — ej. "$B$4:$B$25" */
+  /** Rango de valores — ej. "$B$4:$B$25" */
   valRange:   string;
   /** Celda con el nombre de la serie — ej. "$B$3" */
   serNameRef: string;
@@ -25,23 +29,34 @@ export type BarChartOpts = {
   /** Anclas (0-indexed). */
   fromCol: number; fromRow: number;
   toCol:   number; toRow:   number;
+  /** Id único del chart dentro del libro (default 1). */
+  chartId?: number;
+  /** Dirección de barras: "bar" horizontal (default) o "col" columnas verticales. */
+  barDir?: "bar" | "col";
+  /** Código de formato numérico (default `0"%"`). */
+  numFmt?: string;
+  /** Máximo del eje de valores (ej. 1 para fracciones). */
+  valMax?: number;
+  /** Unidad mayor del eje de valores (ej. 0.25). */
+  valMajorUnit?: number;
 };
 
 export async function injectBarChart(buffer: Uint8Array, opts: BarChartOpts): Promise<Uint8Array> {
+  const id  = opts.chartId ?? 1;
   const zip = await JSZip.loadAsync(buffer);
 
-  zip.file("xl/charts/chart1.xml",                  chartXml(opts));
-  zip.file("xl/drawings/drawing1.xml",              drawingXml(opts));
-  zip.file("xl/drawings/_rels/drawing1.xml.rels",   drawingRelsXml());
+  zip.file(`xl/charts/chart${id}.xml`,                chartXml(opts));
+  zip.file(`xl/drawings/drawing${id}.xml`,            drawingXml(opts));
+  zip.file(`xl/drawings/_rels/drawing${id}.xml.rels`, drawingRelsXml(id));
 
   // [Content_Types].xml — añadir los Override del chart y drawing
   const ctPath = "[Content_Types].xml";
   let ct = await zip.file(ctPath)!.async("string");
-  if (!ct.includes("/xl/charts/chart1.xml")) {
+  if (!ct.includes(`/xl/charts/chart${id}.xml`)) {
     ct = ct.replace(
       "</Types>",
-      `<Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>` +
-      `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` +
+      `<Override PartName="/xl/charts/chart${id}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>` +
+      `<Override PartName="/xl/drawings/drawing${id}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` +
       `</Types>`,
     );
     zip.file(ctPath, ct);
@@ -72,16 +87,17 @@ export async function injectBarChart(buffer: Uint8Array, opts: BarChartOpts): Pr
   }
 
   // worksheet rels
+  const relTarget = `../drawings/drawing${id}.xml`;
   if (relsXml) {
     relsXml = relsXml.replace(
       "</Relationships>",
-      `<Relationship Id="${drawingId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`,
+      `<Relationship Id="${drawingId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="${relTarget}"/></Relationships>`,
     );
   } else {
     relsXml =
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-      `<Relationship Id="${drawingId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>` +
+      `<Relationship Id="${drawingId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="${relTarget}"/>` +
       `</Relationships>`;
   }
   zip.file(sheetRelsPath, relsXml);
@@ -113,6 +129,55 @@ function chartXml(opts: BarChartOpts): string {
   const title   = escapeXml(opts.title);
   const sname   = escapeXml(opts.serName);
 
+  const barDir   = opts.barDir ?? "bar";
+  const isCol     = barDir === "col";
+  const numFmt    = opts.numFmt ?? `0"%"`;
+  const numFmtAttr = numFmt.replace(/"/g, "&quot;");
+
+  // Relleno de serie: columnas con degradado verde (estilo Excel), barras con sólido.
+  const serFill = isCol
+    ? `<a:gradFill><a:gsLst>` +
+        `<a:gs pos="0"><a:srgbClr val="C6E0B4"/></a:gs>` +
+        `<a:gs pos="100000"><a:srgbClr val="548235"/></a:gs>` +
+      `</a:gsLst><a:lin ang="5400000" scaled="1"/></a:gradFill>`
+    : `<a:solidFill><a:srgbClr val="9BBB59"/></a:solidFill>`;
+
+  // Escala del eje de valores
+  const scaleExtra =
+    (opts.valMax != null ? `<c:max val="${opts.valMax}"/><c:min val="0"/>` : ``);
+  const majorUnit = opts.valMajorUnit != null ? `<c:majorUnit val="${opts.valMajorUnit}"/>` : ``;
+
+  // Ejes según dirección
+  const catAx = `
+      <c:catAx>
+        <c:axId val="111111111"/>
+        <c:scaling><c:orientation val="${isCol ? "minMax" : "maxMin"}"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="${isCol ? "b" : "l"}"/>
+        <c:crossAx val="222222222"/>
+        <c:crosses val="autoZero"/>
+        <c:auto val="1"/>
+        <c:lblAlgn val="ctr"/>
+        <c:lblOffset val="100"/>
+        <c:noMultiLvlLbl val="0"/>
+      </c:catAx>`;
+  const valAx = `
+      <c:valAx>
+        <c:axId val="222222222"/>
+        <c:scaling><c:orientation val="minMax"/>${scaleExtra}</c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="${isCol ? "l" : "b"}"/>
+        <c:majorGridlines/>
+        <c:numFmt formatCode="${numFmtAttr}" sourceLinked="0"/>
+        <c:majorTickMark val="out"/>
+        <c:minorTickMark val="none"/>
+        <c:tickLblPos val="nextTo"/>
+        <c:crossAx val="111111111"/>
+        <c:crosses val="${isCol ? "autoZero" : "max"}"/>
+        <c:crossBetween val="between"/>
+        ${majorUnit}
+      </c:valAx>`;
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <c:chart>
@@ -142,7 +207,7 @@ function chartXml(opts: BarChartOpts): string {
     <c:plotArea>
       <c:layout/>
       <c:barChart>
-        <c:barDir val="bar"/>
+        <c:barDir val="${barDir}"/>
         <c:grouping val="clustered"/>
         <c:varyColors val="0"/>
         <c:ser>
@@ -158,12 +223,12 @@ function chartXml(opts: BarChartOpts): string {
             </c:strRef>
           </c:tx>
           <c:spPr>
-            <a:solidFill><a:srgbClr val="9BBB59"/></a:solidFill>
+            ${serFill}
             <a:ln w="9525"><a:solidFill><a:srgbClr val="6B8E3D"/></a:solidFill></a:ln>
           </c:spPr>
           <c:invertIfNegative val="0"/>
           <c:dLbls>
-            <c:numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>
+            <c:numFmt formatCode="${numFmtAttr}" sourceLinked="0"/>
             <c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>
             <c:txPr>
               <a:bodyPr rot="0" spcFirstLastPara="1" vertOverflow="ellipsis" wrap="square" lIns="38100" tIns="19050" rIns="38100" bIns="19050" anchor="ctr" anchorCtr="1"/>
@@ -195,7 +260,7 @@ function chartXml(opts: BarChartOpts): string {
             <c:numRef>
               <c:f>${valFull}</c:f>
               <c:numCache>
-                <c:formatCode>0"%"</c:formatCode>
+                <c:formatCode>${numFmt}</c:formatCode>
                 <c:ptCount val="0"/>
               </c:numCache>
             </c:numRef>
@@ -204,32 +269,7 @@ function chartXml(opts: BarChartOpts): string {
         <c:gapWidth val="60"/>
         <c:axId val="111111111"/>
         <c:axId val="222222222"/>
-      </c:barChart>
-      <c:catAx>
-        <c:axId val="111111111"/>
-        <c:scaling><c:orientation val="maxMin"/></c:scaling>
-        <c:delete val="0"/>
-        <c:axPos val="l"/>
-        <c:crossAx val="222222222"/>
-        <c:crosses val="autoZero"/>
-        <c:auto val="1"/>
-        <c:lblAlgn val="ctr"/>
-        <c:lblOffset val="100"/>
-        <c:noMultiLvlLbl val="0"/>
-      </c:catAx>
-      <c:valAx>
-        <c:axId val="222222222"/>
-        <c:scaling><c:orientation val="minMax"/></c:scaling>
-        <c:delete val="0"/>
-        <c:axPos val="b"/>
-        <c:numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>
-        <c:majorTickMark val="out"/>
-        <c:minorTickMark val="none"/>
-        <c:tickLblPos val="nextTo"/>
-        <c:crossAx val="111111111"/>
-        <c:crosses val="max"/>
-        <c:crossBetween val="between"/>
-      </c:valAx>
+      </c:barChart>${catAx}${valAx}
     </c:plotArea>
     <c:plotVisOnly val="1"/>
     <c:dispBlanksAs val="gap"/>
@@ -238,6 +278,7 @@ function chartXml(opts: BarChartOpts): string {
 }
 
 function drawingXml(opts: BarChartOpts): string {
+  const id = opts.chartId ?? 1;
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <xdr:twoCellAnchor>
@@ -251,7 +292,7 @@ function drawingXml(opts: BarChartOpts): string {
     </xdr:to>
     <xdr:graphicFrame macro="">
       <xdr:nvGraphicFramePr>
-        <xdr:cNvPr id="2" name="Chart 1"/>
+        <xdr:cNvPr id="${id + 1}" name="Chart ${id}"/>
         <xdr:cNvGraphicFramePr/>
       </xdr:nvGraphicFramePr>
       <xdr:xfrm>
@@ -269,9 +310,9 @@ function drawingXml(opts: BarChartOpts): string {
 </xdr:wsDr>`;
 }
 
-function drawingRelsXml(): string {
+function drawingRelsXml(id: number): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${id}.xml"/>
 </Relationships>`;
 }
