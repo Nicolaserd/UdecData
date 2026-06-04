@@ -93,13 +93,10 @@ export async function POST(request: NextRequest) {
         errores++;
         ultimoError = lastError;
 
-        // Backoff si ambos proveedores rate-limited
-        const bothRateLimited = errors.length === 2 && errors.every((e) => e.status === 429);
+        // Backoff si TODOS los intentos quedaron rate-limited
+        const bothRateLimited = errors.length > 0 && errors.every((e) => e.status === 429);
         if (bothRateLimited) {
-          const retryAfter = Math.max(
-            errors.find((e) => e.provider === "cerebras")?.retryAfterMs ?? 0,
-            errors.find((e) => e.provider === "groq")?.retryAfterMs     ?? 0,
-          );
+          const retryAfter = Math.max(0, ...errors.map((e) => e.retryAfterMs ?? 0));
           const wait = Math.min(Math.max(retryAfter, 2000), 10_000);
           await new Promise((r) => setTimeout(r, wait));
         }

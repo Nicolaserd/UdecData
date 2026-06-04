@@ -11,8 +11,19 @@ export type ProviderSuccess = { ok: true;  provider: Provider; content: string }
 export type ProviderFailure = { ok: false; provider: Provider; error:   string; status?: number; retryAfterMs?: number };
 export type ProviderCallResult = ProviderSuccess | ProviderFailure;
 
-const CEREBRAS_MODEL = process.env.CEREBRAS_ANALISIS_MODEL ?? "llama3.1-8b";
+const CEREBRAS_MODEL = process.env.CEREBRAS_ANALISIS_MODEL ?? "gpt-oss-120b";
 const GROQ_MODEL     = process.env.GROQ_ANALISIS_MODEL     ?? "llama-3.3-70b-versatile";
+// Modelo Groq de respaldo en un bucket de rate-limit distinto al principal,
+// para que un 429 en el 70B no tumbe todo el lote.
+const GROQ_MODEL_FALLBACK = process.env.GROQ_ANALISIS_MODEL_FALLBACK ?? "llama-3.1-8b-instant";
+
+// Cadena de intentos: cada uno con su (proveedor, modelo). Se prueban en orden.
+type Attempt = { provider: Provider; model: string };
+const FALLBACK_CHAIN: Attempt[] = [
+  { provider: "cerebras", model: CEREBRAS_MODEL },
+  { provider: "groq",     model: GROQ_MODEL },
+  { provider: "groq",     model: GROQ_MODEL_FALLBACK },
+];
 
 const ENDPOINTS: Record<Provider, string> = {
   cerebras: "https://api.cerebras.ai/v1/chat/completions",
@@ -24,12 +35,9 @@ function apiKey(provider: Provider): string | undefined {
   return process.env.GROQ_API_KEY;
 }
 
-function modelFor(provider: Provider): string {
-  return provider === "cerebras" ? CEREBRAS_MODEL : GROQ_MODEL;
-}
-
 async function callOnce(
   provider: Provider,
+  model: string,
   messages: ChatMessage[],
   opts: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
 ): Promise<ProviderCallResult> {
@@ -37,7 +45,7 @@ async function callOnce(
   if (!key) return { ok: false, provider, error: `API key ausente para ${provider}` };
 
   const body = {
-    model: modelFor(provider),
+    model,
     messages,
     temperature: opts.temperature ?? 0.3,
     ...(provider === "cerebras"
@@ -91,8 +99,8 @@ async function callOnce(
 }
 
 /**
- * Intenta Cerebras primero; si falla, cae a Groq.
- * Devuelve el primer resultado exitoso o, si ambos fallan, ambos errores.
+ * Recorre la cadena de fallback (Cerebras → Groq 70B → Groq 8B) y devuelve el
+ * primer resultado exitoso o, si todos fallan, todos los errores acumulados.
  */
 export async function callWithFallback(
   messages: ChatMessage[],
@@ -100,13 +108,11 @@ export async function callWithFallback(
 ): Promise<{ success: ProviderSuccess | null; errors: ProviderFailure[] }> {
   const errors: ProviderFailure[] = [];
 
-  const cerebrasResult = await callOnce("cerebras", messages, opts);
-  if (cerebrasResult.ok) return { success: cerebrasResult, errors };
-  errors.push(cerebrasResult);
-
-  const groqResult = await callOnce("groq", messages, opts);
-  if (groqResult.ok) return { success: groqResult, errors };
-  errors.push(groqResult);
+  for (const { provider, model } of FALLBACK_CHAIN) {
+    const result = await callOnce(provider, model, messages, opts);
+    if (result.ok) return { success: result, errors };
+    errors.push(result);
+  }
 
   return { success: null, errors };
 }

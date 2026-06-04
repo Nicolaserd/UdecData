@@ -64,8 +64,8 @@ export async function POST(request: NextRequest) {
 
       const { success, errors } = await callWithFallback(messages, { maxTokens: 900, temperature: 0.3 });
 
-      // Rate-limit en AMBOS proveedores: no consume intento; hacemos pausa y marcamos error_temporal.
-      const bothRateLimited = !success && errors.length === 2 && errors.every((e) => e.status === 429);
+      // Rate-limit en TODOS los intentos: no consume intento; hacemos pausa y marcamos error_temporal.
+      const bothRateLimited = !success && errors.length > 0 && errors.every((e) => e.status === 429);
 
       const nuevosIntentos: Intentos = {
         cerebras: (prevIntentos.cerebras ?? 0) + (bothRateLimited ? 0 : 1),
@@ -100,10 +100,7 @@ export async function POST(request: NextRequest) {
 
         // Si ambos están rate-limited, hacer una pausa corta para no quemar la cuota
         if (bothRateLimited) {
-          const retryAfter = Math.max(
-            errors.find((e) => e.provider === "cerebras")?.retryAfterMs ?? 0,
-            errors.find((e) => e.provider === "groq")?.retryAfterMs     ?? 0,
-          );
+          const retryAfter = Math.max(0, ...errors.map((e) => e.retryAfterMs ?? 0));
           const wait = Math.min(Math.max(retryAfter, 1500), 8000);
           await new Promise((r) => setTimeout(r, wait));
         }
