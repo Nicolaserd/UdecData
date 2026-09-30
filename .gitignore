@@ -8,3 +8,8 @@ data/
 
 .vercel
 .env*
+
+# Archify: comprobantes locales de validación (contienen rutas del equipo)
+.archify/**/*.json
+!.archify/**/candidate.json
+.archify/**/review-*/
