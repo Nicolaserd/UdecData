@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { Eye, EyeOff, KeyRound, Loader2, X } from "lucide-react";
 
 interface PinModalProps {
-  onConfirm: (pin: string) => Promise<boolean>;
+  /** true = PIN aceptado; false = PIN incorrecto; string = mensaje de error específico */
+  onConfirm: (pin: string) => Promise<boolean | string>;
   onCancel: () => void;
 }
 
@@ -34,12 +35,15 @@ export function PinModal({ onConfirm, onCancel }: PinModalProps) {
     setError("");
     setLoading(true);
     try {
-      const valid = await onConfirm(pin.trim());
-      if (!valid) {
-        setError("PIN incorrecto. Inténtalo de nuevo.");
+      const result = await onConfirm(pin.trim());
+      if (result !== true) {
+        setError(typeof result === "string" ? result : "PIN incorrecto. Inténtalo de nuevo.");
         setPin("");
         inputRef.current?.focus();
       }
+    } catch (err) {
+      // El flujo posterior al PIN falló (red, servidor): mostrarlo en vez de quedarse en silencio
+      setError(err instanceof Error && err.message ? err.message : "No se pudo completar la acción. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { EstudiantesRow } from "../types";
+import { describeServerError } from "../server-errors";
 
 const BATCH_CONCURRENCY = 16;
 
@@ -73,7 +74,7 @@ export async function saveEstudiantes(
 
     return { success: true, saved, skipped };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
-    return { success: false, saved: 0, skipped: 0, error: message };
+    console.error("saveEstudiantes:", error);
+    return { success: false, saved: 0, skipped: 0, error: describeServerError(error, "guardar los datos de estudiantes en la base de datos") };
   }
 }

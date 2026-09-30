@@ -23,6 +23,7 @@ import {
 import { NavBar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { PinModal } from "@/components/reports/pin-modal";
+import { describeHttpError, ensureApiOk, errorMessage, readApiJson, verifyPinRequest } from "@/lib/api-errors";
 
 /** Si el servidor respondió 429, espera Retry-After y devuelve true para reintentar. */
 async function waitIfRateLimited(res: Response): Promise<boolean> {
@@ -227,28 +228,22 @@ export default function EncuestaSatisfaccionPage() {
       fd.append("anio", form.anio);
       fd.append("periodo_academico", form.periodo);
       const res  = await fetch("/api/encuesta-satisfaccion/preview", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Error al analizar");
+      const json = await readApiJson<any>(res, "analizar el archivo de la encuesta");
       setForm((p) => ({ ...p, uploadState: "idle" }));
       setPreviewData(json);
       setPreviewOpen(true);
     } catch (err) {
-      setForm((p) => ({ ...p, uploadState: "error", message: err instanceof Error ? err.message : "Error desconocido" }));
+      setForm((p) => ({ ...p, uploadState: "error", message: errorMessage(err, "analizar el archivo de la encuesta") }));
     }
   }, [form.file, form.anio, form.periodo]);
 
-  const verifyPin = useCallback(async (pin: string): Promise<boolean> => {
-    const res = await fetch("/api/verify-pin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
-    const { valid } = await res.json();
-    if (valid) {
+  const verifyPin = useCallback(async (pin: string): Promise<true | string> => {
+    const result = await verifyPinRequest(pin);
+    if (result === true) {
       setPinOpen(false);
       await runPreview();
     }
-    return valid;
+    return result;
   }, [runPreview]);
 
   const runUpload = useCallback(async () => {
@@ -260,13 +255,12 @@ export default function EncuestaSatisfaccionPage() {
       fd.append("anio", form.anio);
       fd.append("periodo_academico", form.periodo);
       const res  = await fetch("/api/encuesta-satisfaccion/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Error al guardar");
+      const json = await readApiJson<any>(res, "guardar la encuesta en la base de datos");
       setForm((p) => ({ ...p, uploadState: "success", message: json.message, warnings: json.warnings ?? [] }));
       setPreviewOpen(false);
       fetchStats(filterAnio, filterPeriodo, filterSede, filterRol);
     } catch (err) {
-      setForm((p) => ({ ...p, uploadState: "error", message: err instanceof Error ? err.message : "Error desconocido" }));
+      setForm((p) => ({ ...p, uploadState: "error", message: errorMessage(err, "guardar la encuesta en la base de datos") }));
       setPreviewOpen(false);
     }
   }, [form.file, form.anio, form.periodo, fetchStats, filterAnio, filterPeriodo, filterSede, filterRol]);
@@ -281,10 +275,7 @@ export default function EncuestaSatisfaccionPage() {
     try {
       const params = new URLSearchParams({ anio: wcAnio, periodo: wcPeriodo });
       const res    = await fetch(`/api/encuesta-satisfaccion/wordclouds?${params}`);
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: "" }));
-        throw new Error(error || `Error HTTP ${res.status}`);
-      }
+      await ensureApiOk(res, "generar las nubes de palabras");
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -295,7 +286,7 @@ export default function EncuestaSatisfaccionPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setWcError(err instanceof Error ? err.message : "Error desconocido");
+      setWcError(errorMessage(err, "generar las nubes de palabras"));
     } finally {
       setWcLoading(false);
     }
@@ -308,10 +299,7 @@ export default function EncuestaSatisfaccionPage() {
     try {
       const params = new URLSearchParams({ anio: grpAnio, periodo: grpPeriodo });
       const res    = await fetch(`/api/encuesta-satisfaccion/satisfaccion-grupos?${params}`);
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: "" }));
-        throw new Error(error || `Error HTTP ${res.status}`);
-      }
+      await ensureApiOk(res, "generar el Excel de satisfacción por grupos");
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -322,24 +310,30 @@ export default function EncuestaSatisfaccionPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setGrpError(err instanceof Error ? err.message : "Error desconocido");
+      setGrpError(errorMessage(err, "generar el Excel de satisfacción por grupos"));
     } finally {
       setGrpLoading(false);
     }
   }, [grpAnio, grpPeriodo]);
 
-  const verifyResetPin = useCallback(async (pin: string): Promise<boolean> => {
+  const verifyResetPin = useCallback(async (pin: string): Promise<boolean | string> => {
     setResetMessage("");
+    const action = "borrar los análisis guardados";
     try {
       const res = await fetch("/api/encuesta-satisfaccion/analisis/reset-all", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ pin }),
       });
-      const json = await res.json();
       if (res.status === 401) return false;          // PIN incorrecto → PinModal mostrará el error
-      if (!res.ok) {
-        setResetMessage(json.error ?? "Error al borrar datos");
+      if (res.status === 429) {                      // bloqueo por intentos: mostrarlo en el modal
+        return describeHttpError(res, undefined, action);
+      }
+      let json: { deleted: { total: number; chunks: number; consolidados: number; informes: number } };
+      try {
+        json = await readApiJson(res, action);
+      } catch (err) {
+        setResetMessage(errorMessage(err, action));
         setResetPinOpen(false);
         return true;                                  // cierra modal; mostramos error debajo
       }
@@ -352,7 +346,7 @@ export default function EncuestaSatisfaccionPage() {
       setLlmStage("");
       return true;
     } catch (err) {
-      setResetMessage(err instanceof Error ? err.message : "Error desconocido");
+      setResetMessage(errorMessage(err, action));
       setResetPinOpen(false);
       return true;
     }
@@ -370,8 +364,7 @@ export default function EncuestaSatisfaccionPage() {
       // 1. Start: crear chunks
       setLlmStage("Preparando chunks…");
       const startRes  = await fetch("/api/encuesta-satisfaccion/analisis/start", { method: "POST", headers, body });
-      const startJson = await startRes.json();
-      if (!startRes.ok) throw new Error(startJson.error ?? "Error al iniciar");
+      const startJson = await readApiJson<any>(startRes, "iniciar el análisis con IA");
       setLlmProgress({
         chunks:      0,
         total:       startJson.totalChunks,
@@ -389,8 +382,7 @@ export default function EncuestaSatisfaccionPage() {
         while (!done && safety-- > 0) {
           const res  = await fetch("/api/encuesta-satisfaccion/analisis/process", { method: "POST", headers, body });
           if (await waitIfRateLimited(res)) continue;
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error ?? "Error procesando chunks");
+          const json = await readApiJson<any>(res, "analizar los comentarios con IA");
           const terminal = (json.counts.completado ?? 0) + (json.counts.error_final ?? 0);
           setLlmProgress((p) => ({ ...p, chunks: terminal, total: json.counts.total }));
           done = json.done;
@@ -416,8 +408,7 @@ export default function EncuestaSatisfaccionPage() {
         while (!done && safety-- > 0) {
           const res  = await fetch("/api/encuesta-satisfaccion/analisis/consolidate", { method: "POST", headers, body });
           if (await waitIfRateLimited(res)) continue;
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error ?? "Error consolidando");
+          const json = await readApiJson<any>(res, "consolidar el análisis por área");
           const terminal = (json.counts.completado ?? 0) + (json.counts.error ?? 0);
           setLlmProgress((p) => ({ ...p, consol: json.counts.completado, consolTotal: json.counts.total }));
           done = json.done;
@@ -439,10 +430,7 @@ export default function EncuestaSatisfaccionPage() {
       // 4. Generate docx (descarga binaria directa)
       setLlmStage("Generando documento Word…");
       const genRes = await fetch("/api/encuesta-satisfaccion/analisis/generate", { method: "POST", headers, body });
-      if (!genRes.ok) {
-        const j = await genRes.json().catch(() => ({ error: `HTTP ${genRes.status}` }));
-        throw new Error(j.error ?? "Error generando informe");
-      }
+      await ensureApiOk(genRes, "generar el informe Word");
 
       const blob     = await genRes.blob();
       const filename = genRes.headers.get("X-Informe-Filename") ?? `informe_satisfaccion_${llmPeriodo}_${llmAnio}.docx`;
@@ -458,7 +446,7 @@ export default function EncuestaSatisfaccionPage() {
       setLlmUrl(href);
       setLlmStage("Informe generado y descargado");
     } catch (err) {
-      setLlmError(err instanceof Error ? err.message : "Error desconocido");
+      setLlmError(errorMessage(err, "generar el informe con IA"));
       setLlmStage("");
     } finally {
       setLlmBusy(false);

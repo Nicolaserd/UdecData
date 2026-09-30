@@ -24,6 +24,7 @@ import { FileUploadZone } from "./file-upload-zone";
 import { ResultsTable } from "./results-table";
 import { ConfirmOverwrite } from "./confirm-overwrite";
 import { PinModal } from "./pin-modal";
+import { ensureApiOk, errorMessage, readApiJson, verifyPinRequest } from "@/lib/api-errors";
 
 type AggregatedRow = Record<string, string | number>;
 
@@ -244,10 +245,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
           setProgress(70);
 
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || "Error procesando archivos");
-          }
+          await ensureApiOk(response, "procesar y guardar los archivos");
 
           const totalProcessed = parseInt(response.headers.get("X-Total-Processed") || "0");
           const totalAggregated = parseInt(response.headers.get("X-Total-Aggregated") || "0");
@@ -275,12 +273,11 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
               `Guardados ${savedCount} registros en la base de datos${skippedCount > 0 ? ` (${skippedCount} omitidos)` : ""}`
             );
           } else {
-            toast.info("Datos no guardados en la base de datos.");
+            toast.error("Los archivos se procesaron, pero los datos NO se guardaron en la base de datos. Revisa el aviso con el motivo.");
           }
           toast.success(`Procesados ${totalProcessed} registros en ${totalAggregated} grupos`);
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Error desconocido";
-          toast.error(message);
+          toast.error(errorMessage(error, "procesar y guardar los archivos"));
         } finally {
           setProcessing(false);
         }
@@ -299,7 +296,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
       try {
         const detected = await detectPeriod();
         if (!detected) {
-          throw new Error("No se pudo detectar el año/periodo de ningún archivo cargado");
+          throw new Error("No se pudo detectar el año y el periodo en los archivos cargados. Revisa que tengan la columna de año (2000 en adelante) y el semestre 1 o 2 (IPA / IIPA).");
         }
 
         const { anio, periodo } = detected;
@@ -312,10 +309,11 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
           body: JSON.stringify({ anio, periodo }),
         });
 
-        if (checkResponse.ok) {
-          const { categories } = (await checkResponse.json()) as {
-            categories: ExistingCategory[];
-          };
+        {
+          const { categories } = await readApiJson<{ categories: ExistingCategory[] }>(
+            checkResponse,
+            "revisar si ya existen datos de ese periodo",
+          );
 
           // Solo mostrar conflicto para las categorías que se van a procesar
           const conflicting = categories.filter((c) =>
@@ -332,8 +330,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
         await processFiles(loadedCategories);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Error desconocido";
-        toast.error(message);
+        toast.error(errorMessage(error, "preparar la carga de datos"));
         setProcessing(false);
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -347,18 +344,13 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
     /** Validar PIN contra la API y continuar si es correcto */
     const handlePinConfirm = useCallback(
-      async (pin: string): Promise<boolean> => {
-        const res = await fetch("/api/verify-pin", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin }),
-        });
-        const { valid } = (await res.json()) as { valid: boolean };
-        if (valid) {
+      async (pin: string): Promise<true | string> => {
+        const result = await verifyPinRequest(pin);
+        if (result === true) {
           setShowPin(false);
           await handleAfterPin();
         }
-        return valid;
+        return result;
       },
       [handleAfterPin]
     );

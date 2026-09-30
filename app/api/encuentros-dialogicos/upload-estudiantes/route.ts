@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { describeServerError } from "@/lib/server-errors";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import {
@@ -140,7 +141,8 @@ export async function POST(request: NextRequest) {
       warnings: errors,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
+    console.error("guardar el plan de mejoramiento de estudiantes:", error);
+    const message = describeServerError(error, "guardar el plan de mejoramiento de estudiantes");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { describeServerError } from "@/lib/server-errors";
 import { parseMatriculados } from "@/lib/parsers/parse-matriculados";
 import { parseAdmitidos } from "@/lib/parsers/parse-admitidos";
 import { parsePrimiparos } from "@/lib/parsers/parse-primiparos";
@@ -92,10 +93,10 @@ export async function POST(request: NextRequest) {
       ? new Set<string>(JSON.parse(allowedCategoriesRaw))
       : undefined;
 
-    // Save to Supabase
+    // Guardar en la base de datos (Neon)
     const saveResult = await saveEstudiantes(aggregated, allowedCategories);
     if (!saveResult.success) {
-      allWarnings.push(`Supabase: ${saveResult.error}`);
+      allWarnings.push(saveResult.error ?? "No se pudieron guardar los datos en la base de datos.");
     }
 
     // Generate XLSX
@@ -118,10 +119,9 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Error desconocido";
+    console.error("procesar los archivos:", error);
     return NextResponse.json(
-      { error: `Error procesando archivos: ${message}` },
+      { error: describeServerError(error, "procesar los archivos") },
       { status: 500 }
     );
   }

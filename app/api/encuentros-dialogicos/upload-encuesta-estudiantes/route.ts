@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { describeServerError } from "@/lib/server-errors";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -77,7 +78,8 @@ export async function POST(request: NextRequest) {
       warnings,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
+    console.error("guardar la encuesta de estudiantes:", error);
+    const message = describeServerError(error, "guardar la encuesta de estudiantes");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

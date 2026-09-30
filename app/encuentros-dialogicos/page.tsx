@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { NavBar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { errorMessage, readApiJson } from "@/lib/api-errors";
 
 // ─── Columnas requeridas ──────────────────────────────────────────────────────
 
@@ -836,12 +837,11 @@ export default function EncuentrosDialogicosPage() {
       fd.append("encuentro", s.encuentro.trim());
       fd.append("anio",      s.anio);
       const res  = await fetch("/api/encuentros-dialogicos/preview-encuesta", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Error al analizar");
+      const json = await readApiJson<any>(res, `analizar la encuesta de ${tipo}`);
       setter((p) => ({ ...p, uploadState: "idle" }));
       setEncModal({ open: true, tipo, data: json });
     } catch (err) {
-      setter((p) => ({ ...p, uploadState: "error", message: err instanceof Error ? err.message : "Error desconocido" }));
+      setter((p) => ({ ...p, uploadState: "error", message: errorMessage(err, `analizar la encuesta de ${tipo}`) }));
     }
   }, [encEst, encDoc]);
 
@@ -861,13 +861,12 @@ export default function EncuentrosDialogicosPage() {
         ? "/api/encuentros-dialogicos/upload-encuesta-estudiantes"
         : "/api/encuentros-dialogicos/upload-encuesta-docentes";
       const res  = await fetch(endpoint, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Error al guardar");
+      const json = await readApiJson<any>(res, `guardar la encuesta de ${tipo} en la base de datos`);
       setter((p) => ({ ...p, uploadState: "success", message: json.message, warnings: json.warnings ?? [], inserted: json.inserted ?? 0 }));
       setEncModal({ open: false, tipo: "estudiantes", data: null });
       fetchEncuestaStats(encAnio, encEncuentro);
     } catch (err) {
-      setter((p) => ({ ...p, uploadState: "error", message: err instanceof Error ? err.message : "Error desconocido" }));
+      setter((p) => ({ ...p, uploadState: "error", message: errorMessage(err, `guardar la encuesta de ${tipo} en la base de datos`) }));
       setEncModal((m) => ({ ...m, open: false }));
     }
   }, [encModal.tipo, encEst, encDoc, fetchEncuestaStats, encAnio, encEncuentro]);
@@ -888,15 +887,14 @@ export default function EncuentrosDialogicosPage() {
       fd.append("file", file);
       fd.append("tipo", tipo);
       const res  = await fetch("/api/encuentros-dialogicos/preview-planes", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Error al analizar");
+      const json = await readApiJson<any>(res, `analizar el plan de mejoramiento de ${tipo}`);
       setter((p) => ({ ...p, uploadState: "idle" }));
       setModal({ open: true, tipo, data: json });
     } catch (err) {
       setter((p) => ({
         ...p,
         uploadState: "error",
-        message: err instanceof Error ? err.message : "Error desconocido",
+        message: errorMessage(err, `analizar el plan de mejoramiento de ${tipo}`),
       }));
     }
   }, [estudiantes.file, docentes.file]);
@@ -916,8 +914,7 @@ export default function EncuentrosDialogicosPage() {
         ? "/api/encuentros-dialogicos/upload-estudiantes"
         : "/api/encuentros-dialogicos/upload-docentes";
       const res  = await fetch(endpoint, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Error al guardar");
+      const json = await readApiJson<any>(res, `guardar el plan de mejoramiento de ${tipo} en la base de datos`);
       setter((p) => ({
         ...p,
         uploadState: "success",
@@ -931,7 +928,7 @@ export default function EncuentrosDialogicosPage() {
       setter((p) => ({
         ...p,
         uploadState: "error",
-        message: err instanceof Error ? err.message : "Error desconocido",
+        message: errorMessage(err, `guardar el plan de mejoramiento de ${tipo} en la base de datos`),
       }));
       setModal((m) => ({ ...m, open: false }));
     }

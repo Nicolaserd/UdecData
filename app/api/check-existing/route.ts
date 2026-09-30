@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { describeServerError } from "@/lib/server-errors";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
@@ -29,8 +30,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ categories });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Error desconocido";
+    console.error("revisar si ya existen datos de ese periodo:", error);
+    const message = describeServerError(error, "revisar si ya existen datos de ese periodo");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

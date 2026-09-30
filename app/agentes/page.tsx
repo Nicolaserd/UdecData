@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import SettingsModal, { MODELS } from "@/components/agentes/SettingsModal";
 import { NavBar } from "@/components/layout/navbar";
+import { errorMessage, readApiJson } from "@/lib/api-errors";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 type AgentType = "analista" | "soporte";
@@ -685,10 +686,11 @@ export default function AgentesPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        // 429 (límite de mensajes), 400 (entrada inválida), 5xx...: mensaje específico
+        const content = await readApiJson(res, "enviar el mensaje al asistente").then(() => "", (err) => errorMessage(err, "enviar el mensaje al asistente"));
         setConversations((prev) => ({
           ...prev,
-          [activeAgent]: [...prev[activeAgent], { id: genId(), role: "assistant", content: data.error ?? "Error desconocido", timestamp: new Date(), error: true }],
+          [activeAgent]: [...prev[activeAgent], { id: genId(), role: "assistant", content, timestamp: new Date(), error: true }],
         }));
         return;
       }
