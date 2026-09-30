@@ -37,10 +37,12 @@ function ensureFont(): string {
       path.join(process.cwd(), "public", "fonts", f.file),
       path.join(process.cwd(), ".next", "server", "public", "fonts", f.file),
     ];
+    // Las fuentes ya se incluyen vía outputFileTracingIncludes (next.config.ts);
+    // turbopackIgnore evita que este acceso dinámico rastree todo el proyecto.
     for (const p of candidates) {
-      if (fs.existsSync(p)) {
+      if (fs.existsSync(/*turbopackIgnore: true*/ p)) {
         try {
-          GlobalFonts.registerFromPath(p, f.family);
+          GlobalFonts.registerFromPath(/*turbopackIgnore: true*/ p, f.family);
           registeredFamily = f.family;
           return f.family;
         } catch {

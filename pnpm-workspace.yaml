@@ -3,9 +3,8 @@
 # No instalar versiones publicadas hace menos de 24 h (protección supply-chain)
 minimumReleaseAge: 1440
 
-# Red lenta: más tiempo de espera y menos descargas simultáneas
+# Más tiempo de espera para redes lentas (en local, si hace falta: pnpm install --network-concurrency=3)
 fetchTimeout: 600000
-networkConcurrency: 3
 
 # Scripts de instalación (postinstall) permitidos. Todo lo que no esté aquí queda bloqueado.
 # Agregar un paquete solo con justificación (ver .claude/rules/paquetes.md).
