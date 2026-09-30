@@ -230,6 +230,13 @@ function extractSQL(text: string): string | null {
   return line?.trim().replace(/;\s*$/, "") ?? null;
 }
 
+/** Extrae todos los bloques ```sql de una respuesta (generación por lotes). */
+function extractSQLBlocks(text: string): string[] {
+  return [...text.matchAll(/```(?:sql)?\s*([\s\S]*?)```/gi)]
+    .map((m) => m[1].trim().replace(/;\s*$/, ""))
+    .filter((s) => /^\s*(select|with)\b/i.test(s));
+}
+
 // ── Llamada a proveedores IA ───────────────────────────────────────────────────
 interface ModelCallResult {
   reply: string;
@@ -290,14 +297,38 @@ function buildProviderBody(
   maxTokens: number,
   temperature: number
 ) {
+  // gpt-oss razona antes de responder y ese razonamiento cuenta en max_tokens:
+  // esfuerzo bajo + margen para que la respuesta no salga vacía (p. ej. un "SI"/"NO" de 10 tokens).
+  const isGptOss = /gpt-oss/.test(model);
+  const effectiveMax = isGptOss ? maxTokens + REASONING_HEADROOM : maxTokens;
   const tokenParam = provider === "cerebras"
-    ? { max_completion_tokens: maxTokens }
-    : { max_tokens: maxTokens };
-  // gpt-oss razona antes de responder; con esfuerzo alto agota max_tokens y
-  // devuelve content vacío (p. ej. el título de 60 tokens).
-  const reasoningParam = /gpt-oss/.test(model) ? { reasoning_effort: "low" } : {};
+    ? { max_completion_tokens: effectiveMax }
+    : { max_tokens: effectiveMax };
+  // Qwen en Groq: sin razonamiento (respuestas directas y más baratas)
+  const reasoningParam = isGptOss
+    ? { reasoning_effort: "low" }
+    : provider === "groq" && /qwen/.test(model) ? { reasoning_effort: "none" } : {};
 
   return { model, messages, temperature, ...tokenParam, ...reasoningParam };
+}
+
+const REASONING_HEADROOM = 400;
+
+// ── Enfriamiento por modelo tras un 429 (no gastar llamadas en modelos saturados) ──
+const modelCooldownUntil = new Map<string, number>();
+const MAX_WAIT_FOR_COOLDOWN_MS = 8_000;
+
+class ProviderRateLimitError extends Error {
+  constructor(message: string, readonly retryAfterMs: number) { super(message); }
+}
+
+function parseRetryAfterMs(res: Response, raw: string): number {
+  const header = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(header) && header > 0) return Math.min(header * 1000, 60_000);
+  // Groq: "Please try again in 7.56s"
+  const m = raw.match(/try again in ([\d.]+)\s*(ms|s)/i);
+  if (m) return Math.min(Number(m[1]) * (m[2].toLowerCase() === "ms" ? 1 : 1000), 60_000);
+  return 10_000;
 }
 
 function compactProviderError(provider: AiProvider, model: string, status: number, raw: string): string {
@@ -356,15 +387,23 @@ async function callModelOnce(
   });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(compactProviderError(candidate.provider, candidate.model, res.status, err));
+    const detail = compactProviderError(candidate.provider, candidate.model, res.status, err);
+    if (res.status === 429) {
+      const retryAfterMs = parseRetryAfterMs(res, err);
+      modelCooldownUntil.set(candidate.id, Date.now() + retryAfterMs);
+      throw new ProviderRateLimitError(detail, retryAfterMs);
+    }
+    throw new Error(detail);
   }
   const data = await res.json();
   const msg = data.choices?.[0]?.message;
   const finishReason: string = data.choices?.[0]?.finish_reason ?? "stop";
 
-  // Modelos de razonamiento (NVIDIA Nemotron via OpenRouter): content=null, output en reasoning
+  // Solo Nemotron (OpenRouter) entrega la respuesta dentro de `reasoning`.
+  // En gpt-oss el reasoning es inglés interno: si content viene vacío se trata
+  // como fallo para que responda otro modelo (antes se filtraba ese texto al usuario).
   let reply: string = (msg?.content ?? "").trim();
-  if (!reply && msg?.reasoning) {
+  if (!reply && msg?.reasoning && candidate.provider === "openrouter") {
     reply = extractSpanishFromReasoning(msg.reasoning);
   }
   if (!reply) {
@@ -472,6 +511,20 @@ SELECT ...
 Solo SELECT con agregaciones (SUM, AVG, COUNT, GROUP BY). NUNCA SELECT * ni filas individuales. Sin texto adicional.`;
 }
 
+// FASE 2 (lote) — Genera el SQL de TODOS los ítems en una sola llamada
+// (el esquema se envía una vez en vez de una por ítem: ahorra ~3.000 tokens por ítem)
+function getAnalistaQueryBatchPrompt(count: number): string {
+  return `${getAnalistaQueryPrompt().split("Responde ÚNICAMENTE con un bloque SQL:")[0]}
+Recibirás ${count} consultas numeradas. Responde ÚNICAMENTE con ${count} bloques SQL, uno por consulta y en el MISMO orden:
+\`\`\`sql
+SELECT ...  -- consulta 1
+\`\`\`
+\`\`\`sql
+SELECT ...  -- consulta 2
+\`\`\`
+Solo SELECT con agregaciones (SUM, AVG, COUNT, GROUP BY). NUNCA SELECT * ni filas individuales. Sin texto adicional.`;
+}
+
 // FASE 2 — Resumen derivado del plan
 function getAnalistaResumenPrompt(): string {
   return `Eres un asistente de análisis de datos. Tu única tarea: resumir en UNA sola oración en español qué información se va a consultar según el plan recibido.
@@ -557,8 +610,8 @@ function getAnalistaIntroPrompt(marioMode = false): string {
 Genera UN párrafo introductorio formal en español para presentar los resultados del análisis solicitado.
 
 REGLAS:
-- Máximo 3 oraciones.
-- Presenta el contexto del análisis basado en el resumen recibido.
+- Máximo 2 oraciones cortas.
+- Presenta el contexto del análisis basado SOLO en el resumen recibido. No inventes fuentes, procesos, tablas ni detalles que no estén en él.
 - La última oración DEBE terminar exactamente con: "se presentan los resultados:"
 - Habla del tema consultado (p. ej. la matrícula de 2025), NUNCA de ti, de tu tarea, del resumen, de reglas ni de conteos de palabras.
 - Sin SQL. Sin bullets. Solo prosa formal.`;
@@ -743,26 +796,48 @@ async function callModelWithFallback(
   const errors: string[] = [];
   const trace: ModelTraceItem[] = [];
 
-  for (const candidate of modelQueue) {
-    const apiKey = resolveProviderApiKey(candidate.provider, customApiKey);
-    if (!apiKey) {
-      trace.push(toModelTraceItem(candidate, "skipped"));
-      errors.push(`No hay API Key configurada para ${PROVIDER_LABELS[candidate.provider]}`);
-      continue;
+  // Dos pasadas: si todos los modelos están enfriándose por 429, se espera una
+  // vez al que se libere primero (si es poco tiempo) en vez de fallar.
+  for (let pass = 0; pass < 2; pass++) {
+    let soonestCooldown = Infinity;
+
+    for (const candidate of modelQueue) {
+      const apiKey = resolveProviderApiKey(candidate.provider, customApiKey);
+      if (!apiKey) {
+        if (pass === 0) {
+          trace.push(toModelTraceItem(candidate, "skipped"));
+          errors.push(`No hay API Key configurada para ${PROVIDER_LABELS[candidate.provider]}`);
+        }
+        continue;
+      }
+      const cooldown = (modelCooldownUntil.get(candidate.id) ?? 0) - Date.now();
+      if (cooldown > 0) {
+        soonestCooldown = Math.min(soonestCooldown, cooldown);
+        continue; // saturado: no gastar una llamada del presupuesto
+      }
+
+      try {
+        const result = await callModelOnce(apiKey, candidate, messages, maxTokens, temperature);
+        return {
+          ...result,
+          modelTrace: compactModelTrace(trace, result.modelTrace),
+        };
+      } catch (error) {
+        // Presupuesto agotado o cliente desconectado: no probar más modelos
+        if (error instanceof LlmBudgetError) throw error;
+        if (error instanceof ProviderRateLimitError) {
+          soonestCooldown = Math.min(soonestCooldown, error.retryAfterMs);
+        }
+        trace.push(toModelTraceItem(candidate, "failed"));
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
     }
 
-    try {
-      const result = await callModelOnce(apiKey, candidate, messages, maxTokens, temperature);
-      return {
-        ...result,
-        modelTrace: compactModelTrace(trace, result.modelTrace),
-      };
-    } catch (error) {
-      // Presupuesto agotado o cliente desconectado: no probar más modelos
-      if (error instanceof LlmBudgetError) throw error;
-      trace.push(toModelTraceItem(candidate, "failed"));
-      errors.push(error instanceof Error ? error.message : String(error));
+    if (pass === 0 && soonestCooldown <= MAX_WAIT_FOR_COOLDOWN_MS) {
+      await new Promise((r) => setTimeout(r, soonestCooldown + 250));
+      continue;
     }
+    break;
   }
 
   throw new Error(errors.join(" | ") || "No hay modelos disponibles para responder");
@@ -946,16 +1021,26 @@ export async function POST(request: NextRequest) {
           // ── Analista: Plan → (SQL → Ejecutar) × N → Extraer → Redactar → Validar → Traducir
 
           // ╔═ PRE-CHECK — ¿Puedo responder sin consultar la BD? (max 3 intentos)╗
-          const MAX_PRECHECK = 3;
+          // Antes eran 3 intentos idénticos: si el modelo decía NO, repetía la misma pregunta.
+          const MAX_PRECHECK = 1;
           let respondidoDesdeContexto = false;
           const allTraces: ModelTraceItem[][] = [];
+
+          // Reparto de fases entre modelos: cada modelo de Groq tiene su propio cupo
+          // de tokens/min, así una pregunta no agota uno solo. Con autoSwitch=false se
+          // respeta el modelo elegido por el usuario.
+          const queueFor = (id: string) => (autoSwitch ? prioritizeModel(modelQueue, id) : modelQueue);
+          const classifyQueue = queueFor("groq:qwen/qwen3.8-27b");   // SI/NO, sin razonamiento
+          const planQueue     = queueFor("groq:qwen/qwen3.8-27b");
+          const sqlQueue      = queueFor("groq:openai/gpt-oss-120b");
+          const lightQueue    = queueFor("groq:openai/gpt-oss-20b");  // resumen, interpretación, intro
 
           for (let pc = 0; pc < MAX_PRECHECK; pc++) {
             send({ step: "validating_answer" });
 
             // Modelo sube → pregunta si puede responder sin BD
             const preCheckResult = await callModelWithFallback(
-              apiKey, modelQueue,
+              apiKey, classifyQueue,
               [
                 { role: "system", content: getAnalistaPreCheckPrompt() },
                 ...(summary ? [{ role: "system" as const, content: `Resumen de conversación: ${summary}` }] : []),
@@ -997,7 +1082,7 @@ export async function POST(request: NextRequest) {
           send({ step: "planning" });
           const planResult = await callModelWithFallback(
             apiKey,
-            modelQueue,
+            planQueue,
             [
               { role: "system", content: getAnalistaPlanPrompt() },
               ...(summary ? [{ role: "system" as const, content: `Contexto previo: ${summary}` }] : []),
@@ -1054,7 +1139,7 @@ export async function POST(request: NextRequest) {
 
             // FASE 2 — Resumen derivado del plan → modelo baja
             const resumenResult = await callModelWithFallback(
-              apiKey, modelQueue,
+              apiKey, lightQueue,
               [
                 { role: "system", content: getAnalistaResumenPrompt() },
                 { role: "user", content: `Plan de consultas:\n${planItems.map((p, i) => `${i + 1}. ${p}`).join("\n")}` },
@@ -1070,7 +1155,7 @@ export async function POST(request: NextRequest) {
             // FASE 3 — Validar coherencia plan+resumen con la pregunta → modelo baja
             send({ step: "validating_answer" });
             const validarResult = await callModelWithFallback(
-              apiKey, modelQueue,
+              apiKey, classifyQueue,
               [
                 { role: "system", content: getAnalistaValidarPrompt() },
                 {
@@ -1091,7 +1176,7 @@ export async function POST(request: NextRequest) {
 
             // Validación negativa — ¿puede la BD responder esto?
             const puedeBDResult = await callModelWithFallback(
-              apiKey, modelQueue,
+              apiKey, classifyQueue,
               [
                 { role: "system", content: getAnalistaPuedeBDPrompt() },
                 { role: "user", content: `Pregunta: "${message}"` },
@@ -1123,7 +1208,7 @@ export async function POST(request: NextRequest) {
             if (intento < MAX_INTENTOS - 1) {
               send({ step: "planning" });
               const mejorarResult = await callModelWithFallback(
-                apiKey, modelQueue,
+                apiKey, lightQueue,
                 [
                   { role: "system", content: getAnalistaMejorarPlanPrompt() },
                   {
@@ -1163,15 +1248,43 @@ export async function POST(request: NextRequest) {
           const executedSQLs: string[] = [];
           let anyQueryError = false;
 
+          // Lote: todo el SQL en una sola llamada (el esquema viaja una vez).
+          // Si faltan bloques, esos ítems se generan uno a uno como antes.
+          let batchSQL: (string | null)[] = [];
+          if (planItems.length > 1) {
+            send({ step: "executing", current: 1, total: planItems.length });
+            try {
+              const batchResult = await callModelWithFallback(
+                apiKey, sqlQueue,
+                [
+                  { role: "system", content: getAnalistaQueryBatchPrompt(planItems.length) },
+                  {
+                    role: "user",
+                    content: `Resumen del análisis: "${resumen}"\n\n${planItems.map((p, i) => `Consulta ${i + 1}: "${p}"`).join("\n")}`,
+                  },
+                ],
+                350 * planItems.length, 0.1
+              );
+              allTraces.push(batchResult.modelTrace);
+              const blocks = extractSQLBlocks(batchResult.reply);
+              batchSQL = planItems.map((_, i) => (blocks.length === planItems.length ? blocks[i] : null));
+            } catch (err) {
+              if (err instanceof LlmBudgetError) throw err;
+              batchSQL = []; // se genera por ítem
+            }
+          }
+
           for (let i = 0; i < planItems.length; i++) {
             const description = planItems[i];
             send({ step: "executing", current: i + 1, total: planItems.length });
 
-            // Modelo sube: genera SQL para este ítem
+            // Modelo sube: genera SQL para este ítem (solo si el lote no lo trajo)
             let queryGenResult: ModelCallResult;
-            try {
+            if (batchSQL[i]) {
+              queryGenResult = { reply: "```sql\n" + batchSQL[i] + "\n```" } as ModelCallResult;
+            } else try {
               queryGenResult = await callModelWithFallback(
-                apiKey, modelQueue,
+                apiKey, sqlQueue,
                 [
                   { role: "system", content: getAnalistaQueryPrompt() },
                   { role: "user", content: `Resumen del análisis: "${resumen}"\n\nConsulta ${i + 1}: "${description}"` },
@@ -1232,7 +1345,7 @@ export async function POST(request: NextRequest) {
             let interpResult: ModelCallResult;
             try {
               interpResult = await callModelWithFallback(
-                apiKey, modelQueue,
+                apiKey, lightQueue,
                 [
                   { role: "system", content: getAnalistaInterpretOnePrompt(marioMode) },
                   { role: "user", content: `Análisis solicitado: "${resumen}"\nConsulta: "${description}"\nDatos:\n${data}` },
@@ -1258,7 +1371,7 @@ export async function POST(request: NextRequest) {
           let introText = "";
           try {
             const introResult = await callModelWithFallback(
-              apiKey, modelQueue,
+              apiKey, lightQueue,
               [
                 { role: "system", content: getAnalistaIntroPrompt(marioMode) },
                 { role: "user", content: `Análisis solicitado: "${resumen}"` },

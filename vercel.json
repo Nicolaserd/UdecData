@@ -5,6 +5,9 @@
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "app/api/agentes/chat/route.ts": {
+      "maxDuration": 60
     }
   }
 }
