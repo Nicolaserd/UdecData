@@ -120,11 +120,17 @@ function validateSQL(sql: string): { ok: boolean; reason?: string } {
   return { ok: true };
 }
 
-// Pool compartido por instancia (antes se abría y cerraba uno por consulta)
+// Pool compartido por instancia (antes se abría y cerraba uno por consulta).
+// Usa el rol chat_ia_lectura (CHAT_DATABASE_URL): solo SELECT sobre las 5 tablas
+// del chat, solo lectura y timeout de 8 s a nivel de rol. Así el SQL que genera
+// la IA no puede escribir ni ver otras tablas aunque se salte el BEGIN READ ONLY.
 let readOnlyPool: Pool | null = null;
 function getReadOnlyPool(): Pool {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.CHAT_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL no configurado");
+  if (!process.env.CHAT_DATABASE_URL) {
+    console.warn("CHAT_DATABASE_URL no configurada: el SQL del chat usa el rol principal");
+  }
   readOnlyPool ??= new Pool({ connectionString: url, max: 2, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 10_000 });
   return readOnlyPool;
 }
