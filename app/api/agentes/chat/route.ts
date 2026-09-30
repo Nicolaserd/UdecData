@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool, PoolClient } from "pg";
 import {
+  AUX_MODEL_ID,
   type AgentType,
   type AiModelOption,
   type AiProvider,
@@ -277,7 +278,7 @@ function resolveProviderApiKey(provider: AiProvider, customApiKey?: string): str
 
 function getProviderEndpoint(provider: AiProvider): string {
   if (provider === "groq") return "https://api.groq.com/openai/v1/chat/completions";
-  if (provider === "kimi") return "https://api.moonshot.cn/v1/chat/completions";
+  if (provider === "kimi") return "https://api.moonshot.ai/v1/chat/completions";
   if (provider === "openrouter") return "https://openrouter.ai/api/v1/chat/completions";
   return "https://api.cerebras.ai/v1/chat/completions";
 }
@@ -292,8 +293,11 @@ function buildProviderBody(
   const tokenParam = provider === "cerebras"
     ? { max_completion_tokens: maxTokens }
     : { max_tokens: maxTokens };
+  // gpt-oss razona antes de responder; con esfuerzo alto agota max_tokens y
+  // devuelve content vacío (p. ej. el título de 60 tokens).
+  const reasoningParam = /gpt-oss/.test(model) ? { reasoning_effort: "low" } : {};
 
-  return { model, messages, temperature, ...tokenParam };
+  return { model, messages, temperature, ...tokenParam, ...reasoningParam };
 }
 
 function compactProviderError(provider: AiProvider, model: string, status: number, raw: string): string {
@@ -474,7 +478,8 @@ function getAnalistaResumenPrompt(): string {
 
 REGLAS:
 - Máximo 20 palabras. Solo la esencia del plan.
-- En español. Sin SQL. Sin explicaciones.
+- En español. Sin SQL. Sin explicaciones ni comentarios sobre tu respuesta.
+- Devuelve SOLO la oración.
 - Ejemplo: "Total de estudiantes matriculados por sede en 2025"`;
 }
 
@@ -555,6 +560,7 @@ REGLAS:
 - Máximo 3 oraciones.
 - Presenta el contexto del análisis basado en el resumen recibido.
 - La última oración DEBE terminar exactamente con: "se presentan los resultados:"
+- Habla del tema consultado (p. ej. la matrícula de 2025), NUNCA de ti, de tu tarea, del resumen, de reglas ni de conteos de palabras.
 - Sin SQL. Sin bullets. Solo prosa formal.`;
   return marioMode ? base + MARIO_ADDON : base;
 }
@@ -850,7 +856,7 @@ export async function POST(request: NextRequest) {
     if (generateTitle && summary) {
       const result = await runWithLlmBudget(LLM_BUDGET.aux, request.signal, () => callModelWithFallback(
         apiKey,
-        buildFallbackQueue(agent, "groq:llama-3.1-8b-instant"),
+        buildFallbackQueue(agent, AUX_MODEL_ID),
         [
           {
             role: "system",
@@ -871,7 +877,7 @@ export async function POST(request: NextRequest) {
         .join("\n");
       const summary = await runWithLlmBudget(LLM_BUDGET.aux, request.signal, () => callModelWithFallback(
         apiKey,
-        buildFallbackQueue(agent, "groq:llama-3.1-8b-instant"),
+        buildFallbackQueue(agent, AUX_MODEL_ID),
         [
           {
             role: "system",
@@ -1055,7 +1061,9 @@ export async function POST(request: NextRequest) {
               ],
               80, 0.1
             );
-            resumen = resumenResult.reply.trim();
+            // Algunos modelos añaden comentarios sobre su propia respuesta
+            // ("la frase tiene 14 palabras…"): quedarse solo con la primera oración.
+            resumen = resumenResult.reply.trim().split(/\n+/)[0].replace(/^["'«]|["'»]$/g, "").split(/(?<=\.)\s/)[0].trim();
             allTraces.push(resumenResult.modelTrace);
             // Modelo baja
 

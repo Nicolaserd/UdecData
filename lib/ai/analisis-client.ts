@@ -11,18 +11,20 @@ export type ProviderSuccess = { ok: true;  provider: Provider; content: string }
 export type ProviderFailure = { ok: false; provider: Provider; error:   string; status?: number; retryAfterMs?: number };
 export type ProviderCallResult = ProviderSuccess | ProviderFailure;
 
+// Modelos verificados el 2026-09-30 (los Llama de Groq fueron retirados).
 const CEREBRAS_MODEL = process.env.CEREBRAS_ANALISIS_MODEL ?? "gpt-oss-120b";
-const GROQ_MODEL     = process.env.GROQ_ANALISIS_MODEL     ?? "llama-3.3-70b-versatile";
+const GROQ_MODEL     = process.env.GROQ_ANALISIS_MODEL     ?? "openai/gpt-oss-120b";
 // Modelo Groq de respaldo en un bucket de rate-limit distinto al principal,
-// para que un 429 en el 70B no tumbe todo el lote.
-const GROQ_MODEL_FALLBACK = process.env.GROQ_ANALISIS_MODEL_FALLBACK ?? "llama-3.1-8b-instant";
+// para que un 429 en el 120B no tumbe todo el lote.
+const GROQ_MODEL_FALLBACK = process.env.GROQ_ANALISIS_MODEL_FALLBACK ?? "qwen/qwen3.8-27b";
 
 // Cadena de intentos: cada uno con su (proveedor, modelo). Se prueban en orden.
+// Groq primero: Cerebras exige plan de pago (queda como último respaldo).
 type Attempt = { provider: Provider; model: string };
 const FALLBACK_CHAIN: Attempt[] = [
-  { provider: "cerebras", model: CEREBRAS_MODEL },
   { provider: "groq",     model: GROQ_MODEL },
   { provider: "groq",     model: GROQ_MODEL_FALLBACK },
+  { provider: "cerebras", model: CEREBRAS_MODEL },
 ];
 
 const ENDPOINTS: Record<Provider, string> = {
@@ -51,6 +53,8 @@ async function callOnce(
     ...(provider === "cerebras"
       ? { max_completion_tokens: opts.maxTokens ?? 1200 }
       : { max_tokens:            opts.maxTokens ?? 1200 }),
+    // gpt-oss razona antes de responder; con esfuerzo bajo no agota max_tokens
+    ...(/gpt-oss/.test(model) ? { reasoning_effort: "low" } : {}),
   };
 
   const ctl = new AbortController();

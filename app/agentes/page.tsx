@@ -386,7 +386,7 @@ export default function AgentesPage() {
     interpretation?: string;
   } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("groq:llama-3.3-70b-versatile");
+  const [selectedModel, setSelectedModel] = useState("groq:openai/gpt-oss-120b");
   const [customApiKey, setCustomApiKey] = useState("");
   const [autoSwitch, setAutoSwitch] = useState(true);
   const [marioMode, setMarioMode] = useState(false);

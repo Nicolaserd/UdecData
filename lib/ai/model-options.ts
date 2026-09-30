@@ -16,76 +16,37 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
   openrouter: "OpenRouter",
 };
 
+// Verificados contra las APIs de cada proveedor el 2026-09-30. Groq es la base
+// (Cerebras pide pago y Kimi tiene la cuenta suspendida por saldo; quedan como
+// respaldo por si se reactivan). Revisar con `/v1/models` si el chat deja de responder.
 export const AI_MODELS: AiModelOption[] = [
   {
-    id: "groq:llama-3.3-70b-versatile",
+    id: "groq:openai/gpt-oss-120b",
     provider: "groq",
-    model: "llama-3.3-70b-versatile",
-    label: "Groq Llama 3.3 70B",
+    model: "openai/gpt-oss-120b",
+    label: "Groq GPT-OSS 120B",
     desc: "Primera opcion para analisis complejos",
   },
   {
-    id: "groq:llama-3.1-8b-instant",
+    id: "groq:openai/gpt-oss-20b",
     provider: "groq",
-    model: "llama-3.1-8b-instant",
-    label: "Groq Llama 3.1 8B Instant",
+    model: "openai/gpt-oss-20b",
+    label: "Groq GPT-OSS 20B",
     desc: "Rapido, ideal para soporte",
   },
   {
-    id: "groq:mixtral-8x7b-32768",
+    id: "groq:qwen/qwen3.8-27b",
     provider: "groq",
-    model: "mixtral-8x7b-32768",
-    label: "Groq Mixtral 8x7B",
-    desc: "Respaldo historico si esta disponible",
+    model: "qwen/qwen3.8-27b",
+    label: "Groq Qwen 3.8 27B",
+    desc: "Buen seguimiento de instrucciones",
   },
   {
-    id: "groq:gemma2-9b-it",
-    provider: "groq",
-    model: "gemma2-9b-it",
-    label: "Groq Gemma 2 9B",
-    desc: "Modelo Google, bueno para instrucciones",
-  },
-  {
-    id: "cerebras:qwen-3-235b",
-    provider: "cerebras",
-    model: "qwen-3-235b",
-    label: "Cerebras Qwen 3 235B",
-    desc: "Mayor razonamiento para respuestas exigentes",
-  },
-  {
-    id: "cerebras:gpt-oss-120b",
-    provider: "cerebras",
-    model: "gpt-oss-120b",
-    label: "Cerebras GPT OSS 120B",
-    desc: "Respaldo de alto rendimiento",
-  },
-  {
-    id: "cerebras:llama-3.1-8b",
-    provider: "cerebras",
-    model: "llama3.1-8b",
-    label: "Cerebras Llama 3.1 8B",
-    desc: "Rapido para soporte y resumen",
-  },
-  {
-    id: "kimi:moonshot-v1-32k",
-    provider: "kimi",
-    model: "moonshot-v1-32k",
-    label: "Kimi Moonshot 32K",
-    desc: "Balanceado, gran contexto",
-  },
-  {
-    id: "kimi:moonshot-v1-8k",
-    provider: "kimi",
-    model: "moonshot-v1-8k",
-    label: "Kimi Moonshot 8K",
-    desc: "Rapido para consultas simples",
-  },
-  {
-    id: "kimi:moonshot-v1-128k",
-    provider: "kimi",
-    model: "moonshot-v1-128k",
-    label: "Kimi Moonshot 128K",
-    desc: "Mayor contexto para analisis extensos",
+    id: "openrouter:google/gemma-4-31b-it:free",
+    provider: "openrouter",
+    model: "google/gemma-4-31b-it:free",
+    label: "OR Gemma 4 31B",
+    desc: "Modelo Google, gratuito",
   },
   {
     id: "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
@@ -95,42 +56,44 @@ export const AI_MODELS: AiModelOption[] = [
     desc: "Gran modelo NVIDIA, gratuito",
   },
   {
-    id: "openrouter:nvidia/nemotron-nano-9b-v2:free",
-    provider: "openrouter",
-    model: "nvidia/nemotron-nano-9b-v2:free",
-    label: "OR NVIDIA Nemotron 9B",
-    desc: "Rapido, razonamiento, gratuito",
+    id: "cerebras:gpt-oss-120b",
+    provider: "cerebras",
+    model: "gpt-oss-120b",
+    label: "Cerebras GPT-OSS 120B",
+    desc: "Requiere plan de pago en Cerebras",
+  },
+  {
+    id: "kimi:kimi-k2.6",
+    provider: "kimi",
+    model: "kimi-k2.6",
+    label: "Kimi K2.6",
+    desc: "Requiere saldo en Moonshot",
   },
 ];
 
 export const FALLBACK_MODEL_IDS: Record<AgentType, string[]> = {
   analista: [
-    "groq:llama-3.3-70b-versatile",
-    "groq:llama-3.1-8b-instant",
-    "groq:mixtral-8x7b-32768",
-    "groq:gemma2-9b-it",
-    "kimi:moonshot-v1-32k",
-    "cerebras:qwen-3-235b",
-    "cerebras:gpt-oss-120b",
-    "cerebras:llama-3.1-8b",
-    "kimi:moonshot-v1-128k",
+    "groq:openai/gpt-oss-120b",
+    "groq:qwen/qwen3.8-27b",
+    "groq:openai/gpt-oss-20b",
     "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
-    "openrouter:nvidia/nemotron-nano-9b-v2:free",
+    "openrouter:google/gemma-4-31b-it:free",
+    "cerebras:gpt-oss-120b",
+    "kimi:kimi-k2.6",
   ],
   soporte: [
-    "groq:llama-3.1-8b-instant",
-    "groq:llama-3.3-70b-versatile",
-    "groq:gemma2-9b-it",
-    "groq:mixtral-8x7b-32768",
-    "kimi:moonshot-v1-8k",
-    "cerebras:llama-3.1-8b",
-    "cerebras:qwen-3-235b",
-    "cerebras:gpt-oss-120b",
-    "kimi:moonshot-v1-32k",
-    "openrouter:nvidia/nemotron-nano-9b-v2:free",
+    "groq:openai/gpt-oss-20b",
+    "groq:qwen/qwen3.8-27b",
+    "groq:openai/gpt-oss-120b",
+    "openrouter:google/gemma-4-31b-it:free",
     "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+    "cerebras:gpt-oss-120b",
+    "kimi:kimi-k2.6",
   ],
 };
+
+/** Modelo rápido para tareas auxiliares (título y resumen del chat). */
+export const AUX_MODEL_ID = "groq:openai/gpt-oss-20b";
 
 export function findAiModel(modelId?: string): AiModelOption | undefined {
   if (!modelId) return undefined;

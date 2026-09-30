@@ -380,7 +380,7 @@ export default function EncuestaSatisfaccionPage() {
       });
 
       // 2. Process: iterar hasta completar
-      setLlmStage("Analizando chunks con IA (Cerebras → Groq)…");
+      setLlmStage("Analizando chunks con IA (Groq)…");
       {
         let safety = 800;
         let done = false;
@@ -704,7 +704,7 @@ export default function EncuestaSatisfaccionPage() {
                 Informe Consolidado con IA
               </h3>
               <p className="mb-5 text-sm leading-relaxed text-[#3e4a3e]">
-                Analiza todos los comentarios por área usando IA (Cerebras con respaldo en Groq). Procesa en chunks,
+                Analiza todos los comentarios por área usando IA (Groq, con respaldo en otros modelos). Procesa en chunks,
                 consolida por área en un párrafo institucional y entrega un documento Word descargable.
               </p>
 
