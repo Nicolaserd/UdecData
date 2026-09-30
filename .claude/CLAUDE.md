@@ -9,6 +9,7 @@ Reglas detalladas en `.claude/rules/` (se cargan solas según los archivos que t
 4. **Secretos solo en `.env`** (`DATABASE_URL`, `DIRECT_URL`, claves IA). Nunca en código, logs ni `NEXT_PUBLIC_*`.
 5. **Git: autoría solo del dueño del repo** (`git config user.*` actual). Sin Co-Authored-By ni firmas de IA.
 6. Commits/push solo cuando el usuario lo pida.
+7. Si un cambio altera la arquitectura (componentes, flujos, seguridad, proveedores), actualizar el diagrama Archify según `rules/diagrama.md`; si no, no tocarlo.
 
 Hook `.claude/hooks/guard.mjs` (PreToolUse) bloquea automáticamente las violaciones de 1 y 5.
 

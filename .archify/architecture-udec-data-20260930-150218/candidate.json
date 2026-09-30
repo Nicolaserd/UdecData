@@ -450,7 +450,7 @@
       "url": "https://github.com/Nicolaserd/UdecData.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "6e7aa5417c48f5f7b1512a4eb0feb18f44772ff0"
+      "revision": "ff971a3b453e3cf5eb1cfa5cc43d6b47d99eb907"
     }
   },
   "components": [
@@ -472,7 +472,7 @@
       "id": "frontend",
       "type": "frontend",
       "label": "Next.js 16 App Router",
-      "sublabel": "6 módulos · React 19",
+      "sublabel": "6 módulos · parseo de reportes",
       "pos": [
         290,
         420
@@ -490,9 +490,15 @@
           "label": "home con ISR"
         },
         {
+          "path": "lib/reports/build-report.ts",
+          "line": 133,
+          "end_line": 186,
+          "label": "reportes en navegador"
+        },
+        {
           "path": "app/agentes/page.tsx",
-          "line": 672,
-          "end_line": 685,
+          "line": 673,
+          "end_line": 686,
           "label": "llama al chat"
         }
       ]
@@ -546,17 +552,25 @@
       ],
       "sources": [
         {
-          "path": "app/api/encuesta-satisfaccion/upload/route.ts",
-          "line": 13,
-          "end_line": 30,
-          "label": "carga Excel"
+          "path": "lib/security.ts",
+          "line": 44,
+          "end_line": 67,
+          "label": "requirePin"
         },
         {
-          "path": "app/api/health/route.ts",
-          "line": 12,
-          "label": "health"
+          "path": "app/api/process-reports/route.ts",
+          "line": 33,
+          "end_line": 60,
+          "label": "filas agregadas"
+        },
+        {
+          "path": "app/api/encuesta-satisfaccion/upload/route.ts",
+          "line": 15,
+          "end_line": 32,
+          "label": "carga Excel"
         }
-      ]
+      ],
+      "tag": "PIN en toda escritura"
     },
     {
       "id": "prisma",
@@ -665,7 +679,7 @@
         {
           "path": "app/api/encuesta-satisfaccion/analisis/process/route.ts",
           "line": 1,
-          "end_line": 19,
+          "end_line": 20,
           "label": "process"
         },
         {
@@ -787,7 +801,7 @@
       "id": "front-proxy",
       "from": "frontend",
       "to": "proxy",
-      "label": "fetch /api/*",
+      "label": "fetch /api/* + PIN",
       "variant": "emphasis"
     },
     {
@@ -870,9 +884,9 @@
       "title": "Seguridad",
       "items": [
         "proxy.ts: límites por IP, Origin y tamaño de body",
+        "PIN exigido en el servidor para toda escritura; bloqueo tras 5 fallos",
         "Chat: 1 mensaje en curso, 40/h, tope global",
-        "SQL de IA: READ ONLY y timeout de 8 s",
-        "PIN comparado en tiempo constante"
+        "SQL de IA: READ ONLY y timeout de 8 s"
       ]
     },
     {
@@ -880,6 +894,7 @@
       "title": "Datos",
       "items": [
         "Neon PostgreSQL vía Prisma (pool 5)",
+        "Reportes de estudiantes procesados en el navegador: al servidor solo llegan filas agregadas",
         "Credenciales solo en .env / Vercel",
         "Inicio con ISR cada 5 min"
       ]
