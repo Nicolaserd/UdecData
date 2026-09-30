@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/security";
 
 /**
  * Protección de /api/*:
@@ -10,11 +11,12 @@ import { NextRequest, NextResponse } from "next/server";
  * para límites globales complementar con Vercel Firewall.
  */
 
-type Tier = "auth" | "worker" | "heavy" | "default";
+type Tier = "auth" | "worker" | "ai" | "heavy" | "default";
 
 const LIMITS: Record<Tier, { max: number; windowMs: number }> = {
   auth:    { max: 5,   windowMs: 10 * 60_000 }, // intentos de PIN
   worker:  { max: 120, windowMs: 60_000 },      // bucles de análisis (process/consolidate)
+  ai:      { max: 30,  windowMs: 60_000 },      // chat IA (capa externa; límites finos en lib/ai-guard.ts)
   heavy:   { max: 20,  windowMs: 60_000 },      // IA, uploads, exports
   default: { max: 120, windowMs: 60_000 },
 };
@@ -33,8 +35,9 @@ const WORKER_ROUTES = [
   "/api/encuesta-satisfaccion/analisis/consolidate",
 ];
 
+const AI_ROUTES = ["/api/agentes/chat"];
+
 const HEAVY_PATTERNS = [
-  /^\/api\/agentes\/chat$/,
   /^\/api\/encuesta-satisfaccion\/analisis\//,
   /^\/api\/encuesta-satisfaccion\/(upload|preview|wordclouds|export-[^/]+|satisfaccion-grupos)$/,
   /^\/api\/encuentros-dialogicos\/(upload-[^/]+|export-[^/]+|preview-[^/]+|normalize-db)$/,
@@ -53,6 +56,7 @@ const UPLOAD_PATTERNS = [
 function tierFor(path: string): Tier {
   if (AUTH_ROUTES.includes(path)) return "auth";
   if (WORKER_ROUTES.includes(path)) return "worker";
+  if (AI_ROUTES.includes(path)) return "ai";
   if (HEAVY_PATTERNS.some((re) => re.test(path))) return "heavy";
   return "default";
 }
@@ -75,12 +79,6 @@ function hit(key: string, tier: Tier, now: number) {
   }
   b.count++;
   return { allowed: b.count <= max, remaining: Math.max(0, max - b.count), resetAt: b.resetAt, max };
-}
-
-function clientIp(req: NextRequest): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "unknown";
 }
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -112,7 +110,7 @@ export function proxy(req: NextRequest) {
 
   // 3. Rate limiting por IP y nivel
   const tier = tierFor(path);
-  const key = `${tier}:${tier === "auth" || tier === "worker" ? path : ""}:${clientIp(req)}`;
+  const key = `${tier}:${tier === "auth" || tier === "worker" || tier === "ai" ? path : ""}:${clientIp(req)}`;
   const r = hit(key, tier, now);
   if (!r.allowed) {
     const retryAfter = Math.ceil((r.resetAt - now) / 1000);

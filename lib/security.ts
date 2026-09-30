@@ -1,5 +1,12 @@
 import { timingSafeEqual, createHash } from "node:crypto";
 
+/** IP del cliente (Vercel envía x-forwarded-for / x-real-ip). */
+export function clientIp(req: { headers: Headers }): string {
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0].trim();
+  return req.headers.get("x-real-ip") ?? "unknown";
+}
+
 /**
  * Compara el PIN recibido con PIN_REGISTRO_BD en tiempo constante
  * (evita ataques de timing). Devuelve false si el PIN no está configurado.

@@ -10,6 +10,15 @@ import {
   PROVIDER_LABELS,
 } from "@/lib/ai/model-options";
 import { DB_CONTEXT } from "@/lib/ai/db-context";
+import {
+  LLM_BUDGET,
+  LlmBudgetError,
+  acquireChatSlot,
+  consumeLlmCall,
+  runWithLlmBudget,
+  sanitizeChatInput,
+} from "@/lib/ai-guard";
+import { clientIp } from "@/lib/security";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 interface ChatMessage {
@@ -110,18 +119,25 @@ function validateSQL(sql: string): { ok: boolean; reason?: string } {
   return { ok: true };
 }
 
-// ── Ejecuta SELECT en una conexión read-only a nivel de sesión ─────────────────
-async function executeReadOnlyQuery(sql: string): Promise<{ rows: Record<string, unknown>[]; rowCount: number }> {
+// Pool compartido por instancia (antes se abría y cerraba uno por consulta)
+let readOnlyPool: Pool | null = null;
+function getReadOnlyPool(): Pool {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL no configurado");
+  readOnlyPool ??= new Pool({ connectionString: url, max: 2, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 10_000 });
+  return readOnlyPool;
+}
 
-  const pool = new Pool({ connectionString: url, max: 2 });
+// ── Ejecuta SELECT en una conexión read-only a nivel de sesión ─────────────────
+async function executeReadOnlyQuery(sql: string): Promise<{ rows: Record<string, unknown>[]; rowCount: number }> {
   let client: PoolClient | null = null;
   try {
-    client = await pool.connect();
+    client = await getReadOnlyPool().connect();
     // BEGIN READ ONLY en lugar de SET SESSION — al hacer COMMIT la conexión
     // vuelve al estado normal en el pool de PgBouncer (no contamina otras rutas)
     await client.query("BEGIN READ ONLY");
+    // SQL generado por IA: cortar consultas pesadas para no saturar la BD
+    await client.query("SET LOCAL statement_timeout = '8s'");
 
     let safeSql = sql.trim();
     if (!/\blimit\s+\d+/i.test(safeSql)) {
@@ -140,7 +156,6 @@ async function executeReadOnlyQuery(sql: string): Promise<{ rows: Record<string,
     throw err;
   } finally {
     client?.release();
-    await pool.end();
   }
 }
 
@@ -328,7 +343,9 @@ async function callModelOnce(
   const extraHeaders: Record<string, string> = candidate.provider === "openrouter"
     ? { "HTTP-Referer": "https://udec-portal.vercel.app", "X-Title": "Portal IA UdeC" }
     : {};
+  const signal = consumeLlmCall(); // presupuesto por mensaje + corte si el cliente se desconecta
   const res = await fetch(getProviderEndpoint(candidate.provider), {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...extraHeaders },
     body: JSON.stringify(buildProviderBody(candidate.provider, candidate.model, messages, maxTokens, temperature)),
@@ -686,7 +703,8 @@ REGLAS:
 }
 
 // ── Convierte errores técnicos en mensajes amigables en español ───────────────
-function friendlyError(raw: string): string {
+function friendlyError(raw: string, error?: unknown): string {
+  if (error instanceof LlmBudgetError) return raw;
   const lower = raw.toLowerCase();
   if (lower.includes("model_decommissioned") || lower.includes("decommissioned")) {
     return "El modelo seleccionado fue dado de baja por Groq y ya no está disponible. Ve a **Configuración** y elige otro modelo.";
@@ -734,6 +752,8 @@ async function callModelWithFallback(
         modelTrace: compactModelTrace(trace, result.modelTrace),
       };
     } catch (error) {
+      // Presupuesto agotado o cliente desconectado: no probar más modelos
+      if (error instanceof LlmBudgetError) throw error;
       trace.push(toModelTraceItem(candidate, "failed"));
       errors.push(error instanceof Error ? error.message : String(error));
     }
@@ -788,15 +808,17 @@ VALIDACION FINAL:
 }
 
 export async function POST(request: NextRequest) {
+  let releaseSlot: () => void = () => {};
   try {
     const body: ChatRequest = await request.json();
+    // Acota historial/resumen (conserva el contexto reciente) antes de usarlos
+    const invalid = sanitizeChatInput(body as unknown as Record<string, unknown>);
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
     const { message, agent, history = [], summary, model, apiKey, summarize, generateTitle, autoSwitch = true, marioMode = false } = body;
-
     if (!summarize && !generateTitle && (!message || typeof message !== "string")) {
       return NextResponse.json({ error: "Mensaje inválido" }, { status: 400 });
-    }
-    if (message && message.length > 2000) {
-      return NextResponse.json({ error: "Mensaje demasiado largo (máx 2000 caracteres)" }, { status: 400 });
     }
     if (!["analista", "soporte"].includes(agent)) {
       return NextResponse.json({ error: "Agente inválido" }, { status: 400 });
@@ -805,6 +827,17 @@ export async function POST(request: NextRequest) {
     if (message && writeOps.test(message)) {
       return NextResponse.json({ error: "Mensaje contiene operaciones no permitidas" }, { status: 400 });
     }
+
+    // ── Límites de uso (por IP, concurrencia y global) ───────────────────────
+    const isAux = Boolean(summarize || generateTitle);
+    const slot = acquireChatSlot(clientIp(request), isAux ? "aux" : "message");
+    if (!slot.ok) {
+      return NextResponse.json(
+        { error: slot.error },
+        { status: slot.status, headers: { "Retry-After": String(slot.retryAfter) } },
+      );
+    }
+    releaseSlot = slot.release;
 
     const selectedModelOption = findAiModel(model);
     const modelQueue = autoSwitch
@@ -815,7 +848,7 @@ export async function POST(request: NextRequest) {
 
     // ── Modo título — genera un título corto a partir del resumen ────────────
     if (generateTitle && summary) {
-      const result = await callModelWithFallback(
+      const result = await runWithLlmBudget(LLM_BUDGET.aux, request.signal, () => callModelWithFallback(
         apiKey,
         buildFallbackQueue(agent, "groq:llama-3.1-8b-instant"),
         [
@@ -827,7 +860,7 @@ export async function POST(request: NextRequest) {
         ],
         60,
         0.3
-      );
+      ));
       return NextResponse.json({ title: result.reply.trim().replace(/^["']|["']$/g, "") });
     }
 
@@ -836,7 +869,7 @@ export async function POST(request: NextRequest) {
       const lines = history
         .map((m) => `${m.role === "user" ? "Usuario" : "Asistente"}: ${m.content}`)
         .join("\n");
-      const summary = await callModelWithFallback(
+      const summary = await runWithLlmBudget(LLM_BUDGET.aux, request.signal, () => callModelWithFallback(
         apiKey,
         buildFallbackQueue(agent, "groq:llama-3.1-8b-instant"),
         [
@@ -854,7 +887,7 @@ export async function POST(request: NextRequest) {
         ],
         512,
         0.2
-      );
+      ));
       return NextResponse.json({ summary: summary.reply, model: summary.model, provider: summary.provider });
     }
 
@@ -871,7 +904,8 @@ export async function POST(request: NextRequest) {
     // ── Streaming NDJSON — emite eventos de progreso ──────────────────────────
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
-      async start(controller) {
+      start(controller) {
+       return runWithLlmBudget(LLM_BUDGET.message, request.signal, async () => {
         const send = (data: object) => {
           controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
         };
@@ -1254,10 +1288,15 @@ export async function POST(request: NextRequest) {
 
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Error desconocido";
-          send({ done: true, reply: friendlyError(msg) });
+          try { send({ done: true, reply: friendlyError(msg, err) }); } catch { /* cliente desconectado */ }
         } finally {
-          controller.close();
+          releaseSlot();
+          try { controller.close(); } catch { /* ya cerrado */ }
         }
+       });
+      },
+      cancel() {
+        releaseSlot();
       },
     });
 
@@ -1266,6 +1305,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
+    releaseSlot();
     const msg = error instanceof Error ? error.message : "Error desconocido";
     const status = msg.includes("límite") || msg.includes("Cambia la API Key") ? 429 : 500;
     return NextResponse.json({ error: msg }, { status });
