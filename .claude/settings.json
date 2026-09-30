@@ -37,6 +37,17 @@
             "statusMessage": "Verificando reglas del proyecto"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-claude-dir.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Protegiendo carpeta .claude"
+          }
+        ]
       }
     ]
   }

@@ -45,9 +45,12 @@ function timeAgo(date: Date | null): string {
   return `Hace ${months} mes${months > 1 ? "es" : ""}`;
 }
 
-export default async function HomePage() {
-  const [estudiantesRow, planesEstRow, planesDocRow, encEstRow, encDocRow, satisfaccionRow] =
-    await Promise.all([
+// ISR: regenera la home cada 5 min (fechas frescas sin consultar la BD en cada visita)
+export const revalidate = 300;
+
+async function getUltimasActualizaciones() {
+  try {
+    return await Promise.all([
       prisma.estudiante.findFirst({ orderBy: { created_at: "desc" }, select: { created_at: true } }),
       prisma.planMejoramientoEstudiante.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
       prisma.planMejoramientoDocente.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
@@ -55,6 +58,16 @@ export default async function HomePage() {
       prisma.encuestaDocente.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
       prisma.encuestaSatisfaccion.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
     ]);
+  } catch (error) {
+    // Si la BD no responde, la home se muestra sin fechas en vez de tumbar el build o la página
+    console.error("HomePage: no se pudieron leer las fechas de actualización", error);
+    return [null, null, null, null, null, null] as const;
+  }
+}
+
+export default async function HomePage() {
+  const [estudiantesRow, planesEstRow, planesDocRow, encEstRow, encDocRow, satisfaccionRow] =
+    await getUltimasActualizaciones();
 
   const estudiantesDate = estudiantesRow?.created_at ?? null;
 
