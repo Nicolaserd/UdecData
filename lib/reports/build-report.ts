@@ -51,10 +51,54 @@ function extensionOf(file: File): string {
   return file.name.toLowerCase().split(".").pop() ?? "";
 }
 
-// Los parsers leen los encabezados exactos (en mayúsculas); solo se toleran BOM,
-// comillas, espacios y la variante "ÁÑO" que también aceptan los parsers.
-function normalizeHeader(h: string): string {
-  return h.replace(/^﻿/, "").replace(/"/g, "").trim().replace("ÁÑO", "AÑO");
+// ── Encabezados: flexibles en la forma, estrictos en el significado ─────────
+// Se ignoran mayúsculas, tildes, "_" y espacios de más; solo se aceptan sinónimos
+// que significan lo mismo. SEMESTRE no tiene sinónimos: el parser necesita 1 o 2.
+const COLUMN_ALIASES: Record<string, string[]> = {
+  "AÑO": ["ANIO"],
+  "SEMESTRE": [],
+  "PROGRAMA": ["NOMBRE PROGRAMA", "NOMBRE DEL PROGRAMA", "PROGRAMA ACADEMICO"],
+  "NOMBRE PROGRAMA": ["PROGRAMA", "NOMBRE DEL PROGRAMA", "PROGRAMA ACADEMICO"],
+  "MUNICIPIO": ["MUNICIPIO PROGRAMA", "MUNICIPIO DEL PROGRAMA"],
+  "MUNICIPIO PROGRAMA": ["MUNICIPIO", "MUNICIPIO DEL PROGRAMA"],
+};
+const HEADER_SEARCH_ROWS = 20;
+
+/** Forma comparable: sin BOM/comillas/tildes, mayúsculas, "_"→espacio ("Año" = "AÑO" = "ANO"). */
+function headerKey(h: string): string {
+  return h
+    .replace(/^\uFEFF/, "")
+    .replace(/"/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[_\s]+/g, " ")
+    .replace(/[:.]+$/, "")
+    .trim();
+}
+
+function acceptedNames(col: string): string {
+  if (col === "SEMESTRE") return "SEMESTRE (con el número 1 o 2; una columna PERIODO con IPA/IIPA no sirve)";
+  const alts = COLUMN_ALIASES[col] ?? [];
+  return alts.length ? `${col} (o ${alts.join(", ")})` : col;
+}
+
+/** Índice de cada columna requerida en la fila: primero nombre exacto, luego sinónimos. */
+function matchColumns(cells: string[], required: readonly string[]) {
+  const keys = cells.map(headerKey);
+  const used = new Set<number>();
+  const found = new Map<string, number>();
+  for (const col of required) {
+    const i = keys.findIndex((k, idx) => !used.has(idx) && k === headerKey(col));
+    if (i >= 0) { found.set(col, i); used.add(i); }
+  }
+  for (const col of required) {
+    if (found.has(col)) continue;
+    const alts = (COLUMN_ALIASES[col] ?? []).map(headerKey);
+    const i = keys.findIndex((k, idx) => !used.has(idx) && alts.includes(k));
+    if (i >= 0) { found.set(col, i); used.add(i); }
+  }
+  return { found, missing: required.filter((c) => !found.has(c)) };
 }
 
 async function readAsCSV(spec: ReportFileSpec, file: File): Promise<string> {
@@ -90,21 +134,49 @@ async function readAsCSV(spec: ReportFileSpec, file: File): Promise<string> {
   }
 }
 
-function checkHeaders(spec: ReportFileSpec, file: File, csv: string): void {
-  const headerLine = csv.split(/\r?\n/, 1)[0] ?? "";
-  if (!headerLine.includes(";") && headerLine.includes(",")) {
+/**
+ * Busca la fila de encabezados en las primeras filas (salta títulos como
+ * "Fecha del reporte: …") y la reescribe con los nombres exactos que leen los
+ * parsers. Devuelve el CSV listo para parsear.
+ */
+function locateHeader(spec: ReportFileSpec, file: File, csv: string): string {
+  const lines = csv.split(/\r?\n/);
+  let best: { row: number; cells: string[]; missing: string[] } | null = null;
+
+  for (let i = 0; i < Math.min(HEADER_SEARCH_ROWS, lines.length); i++) {
+    const line = lines[i];
+    if (!line.replace(/[;,"\s]/g, "")) continue; // fila vacía
+
+    // CSV separado por comas: detectarlo si con comas sí estarían los encabezados
+    if (!line.includes(";") && line.includes(",")) {
+      if (matchColumns(line.split(","), spec.requiredColumns).missing.length === 0) {
+        throw new ReportFileError(
+          `${who(spec, file)}: el CSV usa comas como separador y el sistema espera punto y coma (;). En Excel guárdalo como "CSV (delimitado por punto y coma)" o súbelo como .xlsx.`,
+        );
+      }
+      continue;
+    }
+
+    const cells = line.split(";").map((c) => c.replace(/"/g, "").trim());
+    const { found, missing } = matchColumns(cells, spec.requiredColumns);
+    if (missing.length === 0) {
+      const header = [...cells];
+      for (const [col, idx] of found) header[idx] = col; // nombre exacto para el parser
+      return [header.join(";"), ...lines.slice(i + 1)].join("\n");
+    }
+    if (!best || missing.length < best.missing.length) best = { row: i + 1, cells, missing };
+  }
+
+  const expected = spec.requiredColumns.map(acceptedNames).join("; ");
+  if (!best || best.missing.length === spec.requiredColumns.length) {
     throw new ReportFileError(
-      `${who(spec, file)}: el CSV usa comas como separador y el sistema espera punto y coma (;). En Excel guárdalo como "CSV (delimitado por punto y coma)" o súbelo como .xlsx.`,
+      `${who(spec, file)}: no se encontró la fila de encabezados en las primeras ${HEADER_SEARCH_ROWS} filas. Se esperan las columnas: ${expected}. ¿Es el reporte de ${spec.label}?`,
     );
   }
-  const found = headerLine.split(";").map(normalizeHeader).filter(Boolean);
-  const missing = spec.requiredColumns.filter((col) => !found.includes(normalizeHeader(col)));
-  if (missing.length > 0) {
-    const shown = found.slice(0, 8).join(", ") + (found.length > 8 ? "…" : "");
-    throw new ReportFileError(
-      `${who(spec, file)}: faltan las columnas ${missing.join(", ")} (escritas exactamente así, en mayúsculas). La primera fila debe tener los encabezados; se encontraron: ${shown || "ninguno"}. ¿Es el reporte de ${spec.label}?`,
-    );
-  }
+  const shown = best.cells.filter(Boolean).slice(0, 8).join(", ") + (best.cells.length > 8 ? "…" : "");
+  throw new ReportFileError(
+    `${who(spec, file)}: en la fila ${best.row} (${shown}) faltan las columnas ${best.missing.map(acceptedNames).join("; ")}. ¿Es el reporte de ${spec.label}?`,
+  );
 }
 
 export interface BuiltReport {
@@ -142,8 +214,7 @@ export async function buildReport(
   for (let i = 0; i < reportSpecs.length; i++) {
     const spec = reportSpecs[i];
     const file = files[spec.key]!;
-    const csv = await readAsCSV(spec, file);
-    checkHeaders(spec, file, csv);
+    const csv = locateHeader(spec, file, await readAsCSV(spec, file));
     const result = PARSERS[spec.key](csv);
     if (result.rows.length === 0) {
       throw new ReportFileError(
