@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useRef,
   useState,
 } from "react";
 import {
@@ -24,7 +25,7 @@ import { FileUploadZone } from "./file-upload-zone";
 import { ResultsTable } from "./results-table";
 import { ConfirmOverwrite } from "./confirm-overwrite";
 import { PinModal } from "./pin-modal";
-import { ensureApiOk, errorMessage, pinHeaders, readApiJson, verifyPinRequest } from "@/lib/api-errors";
+import { errorMessage, pinHeaders, readApiJson, verifyPinRequest } from "@/lib/api-errors";
 
 type AggregatedRow = Record<string, string | number>;
 
@@ -128,9 +129,6 @@ const FILE_CONFIGS: readonly FileConfig[] = [
   },
 ];
 
-// Orden de prioridad para leer el año/periodo del archivo
-const PERIOD_DETECTION_ORDER = ["matriculados", "admitidos", "inscritos", "primiparos", "graduados"];
-
 export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
   function UploadForm({ onStatusChange }, ref) {
     const [files, setFiles] = useState<Record<string, File | null>>({
@@ -154,6 +152,8 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
     } | null>(null);
 
     const [showPin, setShowPin] = useState(false);
+    // Reporte ya procesado en el navegador (se reutiliza tras confirmar sobrescritura)
+    const reportRef = useRef<import("@/lib/reports/build-report").BuiltReport | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
     const [existingCategories, setExistingCategories] = useState<ExistingCategory[]>([]);
     const [detectedAnio, setDetectedAnio] = useState<number>(0);
@@ -172,48 +172,6 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
       setFiles((prev) => ({ ...prev, [key]: file }));
     };
 
-    const readAsCSV = async (file: File): Promise<string> => {
-      const ext = file.name.toLowerCase().split(".").pop() ?? "";
-      if (ext === "csv" || ext === "txt") return await file.text();
-      const XLSX = await import("xlsx");
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      return XLSX.utils.sheet_to_csv(worksheet, { FS: ";" });
-    };
-
-    /** Detecta año y periodo del primer archivo disponible en el orden de prioridad */
-    const detectPeriod = async (): Promise<{ anio: number; periodo: string } | null> => {
-      for (const key of PERIOD_DETECTION_ORDER) {
-        if (!files[key]) continue;
-        try {
-          const csvText = await readAsCSV(files[key]!);
-          const lines = csvText.split(/\r?\n/);
-          const headerLine = lines[0]?.replace(/^\uFEFF/, "") ?? "";
-          const firstDataLine = lines[1];
-          if (!firstDataLine) continue;
-
-          const headers = headerLine.split(";").map((h) => h.replace(/"/g, "").trim());
-          const fields = firstDataLine.split(";").map((f) => f.replace(/"/g, "").trim());
-
-          const anioIdx = headers.findIndex(
-            (h) => h === "AÑO" || h === "ÁÑO" || h.includes("AÑO") || h.includes("ÑO")
-          );
-          const semIdx = headers.findIndex((h) => h === "SEMESTRE");
-
-          const anio = anioIdx >= 0 ? parseInt(fields[anioIdx], 10) : parseInt(fields[2], 10);
-          const semestre = semIdx >= 0 ? parseInt(fields[semIdx], 10) : parseInt(fields[3], 10);
-
-          if (isNaN(anio) || anio < 2000) continue;
-          const periodo = semestre === 1 ? "IPA" : semestre === 2 ? "IIPA" : String(semestre);
-          return { anio, periodo };
-        } catch {
-          continue;
-        }
-      }
-      return null;
-    };
-
     /** Categorías cargadas actualmente (excluye "estudiantes" que no tiene categoría) */
     const loadedCategories = FILE_CONFIGS.filter(
       (f) => f.categoria !== null && files[f.key] !== null
@@ -226,57 +184,73 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
         setProgress(20);
 
         try {
-          const formData = new FormData();
+          // 1. Leer, validar y agregar EN EL NAVEGADOR (sin límite de tamaño de archivo)
+          const { buildReport, estudiantesXlsxBlob } = await import("@/lib/reports/build-report");
+          const report = reportRef.current
+            ?? await buildReport(files, FILE_CONFIGS, (p) => setProgress(20 + Math.round(p * 30)));
+          reportRef.current = null;
 
-          // Solo incluir archivos que están cargados
-          for (const config of FILE_CONFIGS) {
-            if (files[config.key]) {
-              formData.append(config.key, files[config.key]!);
-            }
-          }
-          formData.append("allowedCategories", JSON.stringify(allowedCategories));
-
-          setProgress(40);
-
-          const response = await fetch("/api/process-reports", {
-            method: "POST",
-            headers: pinHeaders(),
-            body: formData,
-          });
-
-          setProgress(70);
-
-          await ensureApiOk(response, "procesar y guardar los archivos");
-
-          const totalProcessed = parseInt(response.headers.get("X-Total-Processed") || "0");
-          const totalAggregated = parseInt(response.headers.get("X-Total-Aggregated") || "0");
-          const warnings = JSON.parse(response.headers.get("X-Warnings") || "[]") as string[];
-          const supabaseSaved = response.headers.get("X-Supabase-Saved") === "true";
-          const savedCount = parseInt(response.headers.get("X-Supabase-Saved-Count") || "0");
-          const skippedCount = parseInt(response.headers.get("X-Supabase-Skipped-Count") || "0");
-
-          const blob = await response.blob();
+          // 2. Excel para descargar, generado localmente
+          const blob = estudiantesXlsxBlob(report.aggregated);
           setXlsxBlob(blob);
-          setStats({ totalProcessed, totalAggregated, supabaseSaved, savedCount, skippedCount });
+          setResults(report.aggregated.map((r) => ({
+            "Categoría": r.categoria,
+            "Unidad regional": r.unidadRegional,
+            "Nivel": r.nivel,
+            "Nivel académico": r.nivelAcademico,
+            "Programa académico": r.programaAcademico,
+            "Cantidad": r.cantidad,
+            "Año": r.año,
+            "Periodo": r.periodo,
+          })));
 
-          const XLSX = await import("xlsx");
-          const buffer = await blob.arrayBuffer();
-          const workbook = XLSX.read(buffer, { type: "array" });
-          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const data = XLSX.utils.sheet_to_json<AggregatedRow>(worksheet);
-          setResults(data);
-
+          // 3. Guardar solo las filas agregadas, en lotes pequeños (con PIN)
+          const toSave = report.aggregated.filter((r) => allowedCategories.includes(r.categoria));
+          const BATCH = 2000;
+          let savedCount = 0;
+          let saveError = "";
+          for (let i = 0; i < toSave.length; i += BATCH) {
+            const lote = Math.floor(i / BATCH) + 1;
+            const lotes = Math.ceil(toSave.length / BATCH);
+            try {
+              const res = await fetch("/api/process-reports", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...pinHeaders() },
+                body: JSON.stringify({ rows: toSave.slice(i, i + BATCH), allowedCategories }),
+              });
+              const json = await readApiJson<{ saved: number }>(
+                res,
+                lotes > 1 ? `guardar los datos en la base de datos (lote ${lote} de ${lotes})` : "guardar los datos en la base de datos",
+              );
+              savedCount += json.saved;
+            } catch (err) {
+              saveError = errorMessage(err, "guardar los datos en la base de datos");
+              break;
+            }
+            setProgress(50 + Math.round(((i + BATCH) / Math.max(toSave.length, 1)) * 50));
+          }
+          const skippedCount = report.aggregated.length - toSave.length;
+          setStats({
+            totalProcessed: report.totalProcessed,
+            totalAggregated: report.aggregated.length,
+            supabaseSaved: !saveError,
+            savedCount,
+            skippedCount,
+          });
           setProgress(100);
 
-          if (warnings.length > 0) warnings.forEach((w) => toast.warning(w));
-          if (supabaseSaved) {
-            toast.success(
-              `Guardados ${savedCount} registros en la base de datos${skippedCount > 0 ? ` (${skippedCount} omitidos)` : ""}`
-            );
+          if (report.warnings.length > 0) report.warnings.slice(0, 8).forEach((w) => toast.warning(w));
+          if (report.warnings.length > 8) toast.warning(`y ${report.warnings.length - 8} avisos más (programas o municipios no reconocidos).`);
+          if (saveError) {
+            toast.error(savedCount > 0
+              ? `${saveError} Se alcanzaron a guardar ${savedCount} registros; el Excel con todos los datos está disponible para descargar.`
+              : `${saveError} El Excel con los datos procesados está disponible para descargar.`);
           } else {
-            toast.error("Los archivos se procesaron, pero los datos NO se guardaron en la base de datos. Revisa el aviso con el motivo.");
+            toast.success(
+              `Guardados ${savedCount} registros en la base de datos${skippedCount > 0 ? ` (${skippedCount} de otras categorías no se sobrescribieron)` : ""}`
+            );
           }
-          toast.success(`Procesados ${totalProcessed} registros en ${totalAggregated} grupos`);
+          toast.success(`Procesados ${report.totalProcessed} registros en ${report.aggregated.length} grupos`);
         } catch (error) {
           toast.error(errorMessage(error, "procesar y guardar los archivos"));
         } finally {
@@ -295,9 +269,14 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
       setStats(null);
 
       try {
-        const detected = await detectPeriod();
+        // Leer y validar cada archivo en el navegador: los errores dicen qué archivo
+        // falló y por qué (formato, separador, columnas o contenido)
+        const { buildReport } = await import("@/lib/reports/build-report");
+        const report = await buildReport(files, FILE_CONFIGS, (p) => setProgress(5 + Math.round(p * 15)));
+        reportRef.current = report;
+        const detected = report.mainPeriod;
         if (!detected) {
-          throw new Error("No se pudo detectar el año y el periodo en los archivos cargados. Revisa que tengan la columna de año (2000 en adelante) y el semestre 1 o 2 (IPA / IIPA).");
+          throw new Error("Los archivos no tienen filas con año y semestre válidos (AÑO desde 2000 y SEMESTRE 1 o 2).");
         }
 
         const { anio, periodo } = detected;
@@ -334,7 +313,6 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
         toast.error(errorMessage(error, "preparar la carga de datos"));
         setProcessing(false);
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [files, loadedCategories, processFiles]);
 
     /** Paso 1: mostrar el modal de PIN */
@@ -363,6 +341,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
     };
 
     const handleCancelConfirm = () => {
+      reportRef.current = null;
       setShowConfirm(false);
       setProcessing(false);
     };
