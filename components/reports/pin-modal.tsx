@@ -57,7 +57,7 @@ export function PinModal({ onConfirm, onCancel }: PinModalProps) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 font-home-body backdrop-blur-sm"
       onKeyDown={handleKeyDown}
     >
       <div className="relative w-full max-w-sm rounded-2xl border border-[#bdcabb]/30 bg-white p-8 shadow-2xl">

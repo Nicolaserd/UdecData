@@ -197,23 +197,42 @@ function mostFrequentPeriod(rows: NormalizedStudentRow[]): BuiltReport["mainPeri
   return { anio: Number(anio), periodo };
 }
 
+const periodLabel = (p: string) => p.replace("|", "-");
+
+/** Huella de los datos de un archivo (independiente del orden de filas). */
+function rowsSignature(rows: NormalizedStudentRow[]): string {
+  return rows
+    .map((r) => `${r.año}|${r.periodo}|${r.unidadRegional}|${r.nivel}|${r.nivelAcademico}|${r.programaAcademico}`)
+    .sort()
+    .join("\n");
+}
+
+/** Normaliza el estado del formulario: una casilla puede tener 0, 1 o varios archivos. */
+function asList(v: File | File[] | null | undefined): File[] {
+  return !v ? [] : Array.isArray(v) ? v : [v];
+}
+
 /**
- * @param files     archivos por clave (matriculados, admitidos, …, estudiantes)
+ * @param files     archivos por clave (matriculados, admitidos, …, estudiantes); varios por casilla se suman
  * @param specs     etiqueta y columnas requeridas de cada clave
  * @param onStep    avance (0..1) para la barra de progreso
  */
 export async function buildReport(
-  files: Record<string, File | null>,
+  files: Record<string, File | File[] | null>,
   specs: readonly ReportFileSpec[],
   onStep?: (fraction: number) => void,
 ): Promise<BuiltReport> {
   const allRows: NormalizedStudentRow[] = [];
   const warnings: string[] = [];
-  const reportSpecs = specs.filter((s) => PARSERS[s.key] && files[s.key]);
+  const jobs = specs
+    .filter((s) => PARSERS[s.key])
+    .flatMap((spec) => asList(files[spec.key]).map((file) => ({ spec, file })));
 
-  for (let i = 0; i < reportSpecs.length; i++) {
-    const spec = reportSpecs[i];
-    const file = files[spec.key]!;
+  // Por archivo: periodo(s) que contiene y huella de sus datos, para las comprobaciones cruzadas
+  const perFile: { spec: ReportFileSpec; file: File; periods: string[]; signature: string }[] = [];
+
+  for (let i = 0; i < jobs.length; i++) {
+    const { spec, file } = jobs[i];
     const csv = locateHeader(spec, file, await readAsCSV(spec, file));
     const result = PARSERS[spec.key](csv);
     if (result.rows.length === 0) {
@@ -221,13 +240,47 @@ export async function buildReport(
         `${who(spec, file)}: tiene los encabezados correctos pero ninguna fila válida. Revisa que AÑO y SEMESTRE sean números y que PROGRAMA y MUNICIPIO no estén vacíos.`,
       );
     }
+    const counts = new Map<string, number>();
+    for (const r of result.rows) counts.set(`${r.año}|${r.periodo}`, (counts.get(`${r.año}|${r.periodo}`) ?? 0) + 1);
+    if (counts.size > 1) {
+      const detail = [...counts].map(([p, n]) => `${periodLabel(p)}: ${n} filas`).join(", ");
+      throw new ReportFileError(
+        `${who(spec, file)}: mezcla varios periodos (${detail}). Cada reporte debe ser de un solo año y semestre; separa el archivo por periodo.`,
+      );
+    }
+    perFile.push({ spec, file, periods: [...counts.keys()], signature: rowsSignature(result.rows) });
     allRows.push(...result.rows);
     warnings.push(...result.warnings);
-    onStep?.((i + 1) / (reportSpecs.length + 1));
+    onStep?.((i + 1) / (jobs.length + 1));
+  }
+
+  // Todos los reportes deben ser del mismo periodo
+  const byPeriod = new Map<string, string[]>();
+  for (const f of perFile) {
+    for (const p of f.periods) byPeriod.set(p, [...(byPeriod.get(p) ?? []), who(f.spec, f.file)]);
+  }
+  if (byPeriod.size > 1) {
+    const detail = [...byPeriod].map(([p, names]) => `${periodLabel(p)}: ${names.join(", ")}`).join(" | ");
+    throw new ReportFileError(
+      `Los archivos son de periodos distintos (${detail}). Carga en una misma vez solo reportes del mismo año y semestre.`,
+    );
+  }
+
+  // El mismo contenido en dos archivos (misma o distinta casilla) duplica los datos
+  for (let a = 0; a < perFile.length; a++) {
+    for (let b = a + 1; b < perFile.length; b++) {
+      if (perFile[a].signature !== perFile[b].signature) continue;
+      const A = perFile[a], B = perFile[b];
+      throw new ReportFileError(
+        A.spec.key === B.spec.key
+          ? `${who(A.spec, A.file)} y ${B.file.name} tienen exactamente los mismos datos: se contarían dos veces en ${A.spec.label}. Quita uno de los dos.`
+          : `${who(A.spec, A.file)} y ${who(B.spec, B.file)} tienen exactamente los mismos datos. Probablemente el mismo reporte quedó en dos casillas; revisa que cada archivo esté en su categoría.`,
+      );
+    }
   }
 
   let historico: EstudiantesRow[] | undefined;
-  const histFile = files.estudiantes;
+  const histFile = asList(files.estudiantes)[0];
   const histSpec = specs.find((s) => s.key === "estudiantes");
   if (histFile && histSpec) {
     const ext = extensionOf(histFile);

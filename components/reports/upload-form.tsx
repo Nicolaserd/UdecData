@@ -25,6 +25,8 @@ import { FileUploadZone } from "./file-upload-zone";
 import { ResultsTable } from "./results-table";
 import { ConfirmOverwrite } from "./confirm-overwrite";
 import { PinModal } from "./pin-modal";
+import { FileConflictDialog, type PendingAction, type PendingFile } from "./file-conflict-dialog";
+import { categoryHintFromName, fileHash } from "@/lib/reports/file-checks";
 import { errorMessage, pinHeaders, readApiJson, verifyPinRequest } from "@/lib/api-errors";
 
 type AggregatedRow = Record<string, string | number>;
@@ -131,14 +133,18 @@ const FILE_CONFIGS: readonly FileConfig[] = [
 
 export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
   function UploadForm({ onStatusChange }, ref) {
-    const [files, setFiles] = useState<Record<string, File | null>>({
-      matriculados: null,
-      admitidos: null,
-      primiparos: null,
-      inscritos: null,
-      graduados: null,
-      estudiantes: null,
+    // Cada casilla admite varios archivos (se suman); el histórico, solo uno
+    const [files, setFiles] = useState<Record<string, File[]>>({
+      matriculados: [],
+      admitidos: [],
+      primiparos: [],
+      inscritos: [],
+      graduados: [],
+      estudiantes: [],
     });
+    // Huella SHA-256 de cada archivo elegido, para detectar el mismo archivo en dos casillas
+    const hashes = useRef(new Map<File, string>());
+    const [pending, setPending] = useState<PendingFile | null>(null);
     const [processing, setProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [results, setResults] = useState<AggregatedRow[] | null>(null);
@@ -161,20 +167,75 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
     // Al menos un archivo no-opcional cargado
     const anyReady = FILE_CONFIGS.filter((f) => !f.optional).some(
-      (f) => files[f.key] !== null
+      (f) => files[f.key].length > 0
     );
 
     useEffect(() => {
       onStatusChange?.({ processing, requiredReady: anyReady });
     }, [onStatusChange, processing, anyReady]);
 
-    const handleFileSelected = (key: string, file: File) => {
-      setFiles((prev) => ({ ...prev, [key]: file }));
+    const labelOf = (key: string) => FILE_CONFIGS.find((c) => c.key === key)?.label ?? key;
+
+    /**
+     * Al elegir un archivo se comprueba, en este orden:
+     *  1. ¿ya está en esta misma casilla?            → no se vuelve a subir
+     *  2. ¿es idéntico al de otra casilla?           → no subirlo / moverlo aquí
+     *  3. ¿el nombre parece de otra categoría?       → no subirlo / subirlo allá / subirlo aquí
+     *  4. ¿la casilla ya tiene otros archivos?       → no subirlo / adjuntar / reemplazar
+     * Si nada aplica, se agrega directamente.
+     */
+    const handleFileSelected = async (key: string, file: File) => {
+      let hash: string;
+      try {
+        hash = await fileHash(file);
+      } catch {
+        toast.error(`${labelOf(key)} (${file.name}): no se pudo leer el archivo para comprobarlo. Inténtalo de nuevo.`);
+        return;
+      }
+      hashes.current.set(file, hash);
+      const same = (f: File) => hashes.current.get(f) === hash;
+
+      const current = files[key];
+      const sameSlot = current.find(same);
+      const otherSlot = FILE_CONFIGS.find((c) => c.key !== key && files[c.key].some(same))?.key ?? null;
+      const hintKey = key === "estudiantes" ? null : categoryHintFromName(file.name, key);
+
+      if (!sameSlot && !otherSlot && !hintKey && current.length === 0) {
+        setFiles((prev) => ({ ...prev, [key]: [file] }));
+        return;
+      }
+      setPending({ key, file, sameSlot: sameSlot?.name ?? null, otherSlot, hintKey, existing: current.length });
+    };
+
+    const resolvePending = (action: PendingAction) => {
+      if (!pending) return;
+      const { key, file, otherSlot, hintKey } = pending;
+      const same = (f: File) => hashes.current.get(f) === hashes.current.get(file);
+      setFiles((prev) => {
+        const next = { ...prev };
+        if (action === "move" && otherSlot) {
+          next[otherSlot] = prev[otherSlot].filter((f) => !same(f));
+          next[key] = [...prev[key], file];
+        } else if (action === "attach") {
+          next[key] = [...prev[key], file];
+        } else if (action === "replace") {
+          next[key] = [file];
+        } else if (action === "toHint" && hintKey) {
+          next[hintKey] = [...prev[hintKey], file];
+        }
+        return next;
+      });
+      if (action === "toHint" && hintKey) toast.success(`${file.name} se agregó en ${labelOf(hintKey)}.`);
+      setPending(null);
+    };
+
+    const removeFile = (key: string, index: number) => {
+      setFiles((prev) => ({ ...prev, [key]: prev[key].filter((_, i) => i !== index) }));
     };
 
     /** Categorías cargadas actualmente (excluye "estudiantes" que no tiene categoría) */
     const loadedCategories = FILE_CONFIGS.filter(
-      (f) => f.categoria !== null && files[f.key] !== null
+      (f) => f.categoria !== null && files[f.key].length > 0
     ).map((f) => f.categoria as string);
 
     const processFiles = useCallback(
@@ -358,6 +419,16 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
     return (
       <div className="space-y-8">
+        {/* Archivo repetido, en otra casilla o casilla ya ocupada */}
+        {pending && (
+          <FileConflictDialog
+            pending={pending}
+            labelOf={labelOf}
+            singleFileSlot={pending.key === "estudiantes"}
+            onResolve={resolvePending}
+          />
+        )}
+
         {/* Modal PIN */}
         {showPin && (
           <PinModal
@@ -373,8 +444,9 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
               label={config.label}
               accept={config.accept}
               description={config.description}
-              file={files[config.key]}
-              onFileSelected={(file) => handleFileSelected(config.key, file)}
+              files={files[config.key]}
+              onFileSelected={(file) => void handleFileSelected(config.key, file)}
+              onRemove={(index) => removeFile(config.key, index)}
               requiredColumns={config.requiredColumns}
               icon={config.icon}
               tone={config.tone}

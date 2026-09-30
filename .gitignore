@@ -13,3 +13,6 @@ data/
 .archify/**/*.json
 !.archify/**/candidate.json
 .archify/**/review-*/
+
+# Artefactos de pruebas con Playwright
+.playwright-mcp/

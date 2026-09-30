@@ -3,15 +3,16 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import type { LucideIcon } from "lucide-react";
-import { Info, Upload } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { FileSpreadsheet, Info, Upload, X } from "lucide-react";
 
 interface FileUploadZoneProps {
   label: string;
   accept: string;
   description: string;
-  file: File | null;
+  /** Archivos de la casilla (varios se suman: p. ej. un reporte partido por sede) */
+  files: File[];
   onFileSelected: (file: File) => void;
+  onRemove: (index: number) => void;
   requiredColumns?: readonly string[];
   icon: LucideIcon;
   tone?: "primary" | "secondary";
@@ -21,8 +22,9 @@ export function FileUploadZone({
   label,
   accept,
   description,
-  file,
+  files,
   onFileSelected,
+  onRemove,
   requiredColumns,
   icon: Icon,
   tone = "primary",
@@ -98,8 +100,10 @@ export function FileUploadZone({
       {showColumns && requiredColumns && requiredColumns.length > 0 && (
         <div className="mb-4 rounded-lg border border-[#bdcabb]/30 bg-[#2e3132] p-3 text-[10px] text-[#f0f1f2] shadow-lg">
           <p className="font-home-label mb-2 leading-relaxed">
-            El archivo debe contener estas columnas; el nombre debe coincidir
-            exactamente y la posición no importa.
+            El archivo debe contener estas columnas (la posición no importa). Se
+            aceptan mayúsculas o minúsculas, tildes, filas de título antes de
+            los encabezados y sinónimos como PROGRAMA / NOMBRE PROGRAMA o
+            MUNICIPIO / MUNICIPIO PROGRAMA.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {requiredColumns.map((col) => (
@@ -117,31 +121,46 @@ export function FileUploadZone({
       <div
         {...getRootProps()}
         className={`mt-auto flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-          isDragActive || file
+          isDragActive || files.length > 0
             ? activeBorderClass
             : "border-[#bdcabb] bg-[#f3f4f5]/30 hover:border-[#00682f]"
         }`}
       >
         <input {...getInputProps()} />
         <Upload className="mb-2 size-6 text-[#6e7a6e]" />
-        {file ? (
-          <div className="space-y-2">
-            <span className="text-sm font-medium text-[#191c1d]">
-              Archivo seleccionado
-            </span>
-            <div>
-              <Badge className="bg-[#00682f] text-white">{file.name}</Badge>
-            </div>
-          </div>
-        ) : (
-          <>
-            <span className="text-sm font-medium text-[#3e4a3e]">
-              Arrastre o seleccione archivo
-            </span>
-            <span className="mt-1 text-xs text-[#6e7a6e]">{accept}</span>
-          </>
-        )}
+        <span className="text-sm font-medium text-[#3e4a3e]">
+          {files.length > 0 ? "Arrastre o seleccione otro archivo" : "Arrastre o seleccione archivo"}
+        </span>
+        <span className="mt-1 text-xs text-[#6e7a6e]">{accept}</span>
       </div>
+
+      {files.length > 0 && (
+        <ul className="mt-3 space-y-1.5" aria-label={`Archivos de ${label}`}>
+          {files.map((f, i) => (
+            <li
+              key={`${f.name}-${f.size}-${i}`}
+              className="flex items-center gap-2 rounded-md border border-[#bdcabb]/40 bg-[#f8f9fa] px-2.5 py-1.5 text-xs text-[#191c1d]"
+            >
+              <FileSpreadsheet className="size-3.5 shrink-0 text-[#00682f]" />
+              <span className="min-w-0 flex-1 truncate" title={f.name}>{f.name}</span>
+              <span className="shrink-0 tabular-nums text-[#6e7a6e]">
+                {f.size >= 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(f.size / 1024))} KB`}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                className="shrink-0 rounded p-0.5 text-[#6e7a6e] hover:bg-red-50 hover:text-red-600"
+                aria-label={`Quitar ${f.name}`}
+              >
+                <X className="size-3.5" />
+              </button>
+            </li>
+          ))}
+          {files.length > 1 && (
+            <li className="text-[11px] text-[#3e4a3e]">Se sumarán los {files.length} archivos en {label}.</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }
