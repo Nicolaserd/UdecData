@@ -5,12 +5,12 @@
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "11.28.2",
+      "version": "^11.0.0",
       "onFail": "error"
     }
   },
   "engines": {
-    "node": ">=20.9"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
