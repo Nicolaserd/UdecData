@@ -33,10 +33,9 @@ export async function POST(request: NextRequest) {
       );
 
     const [totalRespuestas, totalComentarios] = await Promise.all([
-      prisma.encuestaSatisfaccion.findMany({
-        where:    { anio, periodo_academico: periodo },
-        select:   { respuesta_id: true },
-        distinct: ["respuesta_id"],
+      prisma.encuestaSatisfaccion.groupBy({
+        by:    ["respuesta_id"],
+        where: { anio, periodo_academico: periodo },
       }).then((r) => r.length),
       prisma.encuestaSatisfaccion.count({
         where: { anio, periodo_academico: periodo, comentarios: { not: null } },

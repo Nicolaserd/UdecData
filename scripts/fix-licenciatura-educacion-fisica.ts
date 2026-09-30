@@ -11,7 +11,7 @@
  * (categoria, unidad_regional, nivel, nivel_academico, programa_academico, anio, periodo),
  * se suma `cantidad` y se elimina la fila duplicada.
  *
- * Run: npx tsx scripts/fix-licenciatura-educacion-fisica.ts
+ * Run: pnpm exec tsx scripts/fix-licenciatura-educacion-fisica.ts
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";

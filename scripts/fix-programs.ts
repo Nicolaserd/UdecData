@@ -5,7 +5,7 @@
  * For records that share the same unique key after renaming,
  * we sum their cantidad and delete the duplicate.
  *
- * Run: npx tsx scripts/fix-programs.ts
+ * Run: pnpm exec tsx scripts/fix-programs.ts
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";

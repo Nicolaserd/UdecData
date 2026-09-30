@@ -1,0 +1,26 @@
+# Seguridad de dependencias (ver .claude/rules/paquetes.md)
+
+# No instalar versiones publicadas hace menos de 24 h (protección supply-chain)
+minimumReleaseAge: 1440
+
+# Red lenta: más tiempo de espera y menos descargas simultáneas
+fetchTimeout: 600000
+networkConcurrency: 3
+
+# Scripts de instalación (postinstall) permitidos. Todo lo que no esté aquí queda bloqueado.
+# Agregar un paquete solo con justificación (ver .claude/rules/paquetes.md).
+allowBuilds:
+  '@prisma/engines': true   # motores de Prisma (migraciones)
+  prisma: true              # CLI de Prisma
+  esbuild: true             # binario nativo usado por tsx
+  unrs-resolver: true       # binario nativo de eslint-plugin-import
+  msw: false                # herramienta de mocks (dependencia de shadcn), no necesaria
+
+# Parches de seguridad para dependencias transitivas (pnpm audit --prod).
+# Solo subidas dentro de la misma versión mayor. Revisar y limpiar cuando el paquete padre se actualice.
+overrides:
+  'ws@>=8.0.0 <8.21.0': ^8.21.0                           # @supabase/realtime-js
+  'nanoid@>=4.0.0 <5.1.16': ^5.1.16                       # docx
+  'browserslist@<4.28.7': ^4.28.7                         # next > styled-jsx > @babel/core
+  'baseline-browser-mapping@>=2.0.0 <2.11.0': ^2.11.0     # next
+  '@babel/core@<7.29.6': ^7.29.6                          # next > styled-jsx

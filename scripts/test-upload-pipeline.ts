@@ -9,7 +9,7 @@
  *
  * NO escribe en la BD ni genera el XLSX. Solo diagnóstico.
  *
- * Run: npx tsx scripts/test-upload-pipeline.ts
+ * Run: pnpm exec tsx scripts/test-upload-pipeline.ts
  */
 import "dotenv/config";
 import { readFileSync } from "node:fs";
@@ -174,7 +174,7 @@ async function main() {
     const ms = Date.now() - t0;
     console.log(`Resultado: ${JSON.stringify(res)}   (${ms} ms)`);
   } else {
-    console.log("\n(Para probar también el guardado: npx tsx scripts/test-upload-pipeline.ts --save)");
+    console.log("\n(Para probar también el guardado: pnpm exec tsx scripts/test-upload-pipeline.ts --save)");
   }
 
   console.log("\n✅ Pipeline corrió sin lanzar excepciones.");

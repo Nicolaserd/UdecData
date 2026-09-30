@@ -24,6 +24,14 @@ import { NavBar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { PinModal } from "@/components/reports/pin-modal";
 
+/** Si el servidor respondió 429, espera Retry-After y devuelve true para reintentar. */
+async function waitIfRateLimited(res: Response): Promise<boolean> {
+  if (res.status !== 429) return false;
+  const secs = Math.min(Number(res.headers.get("Retry-After")) || 5, 60);
+  await new Promise((r) => setTimeout(r, secs * 1000));
+  return true;
+}
+
 type UploadState = "idle" | "previewing" | "uploading" | "success" | "error";
 
 type FormState = {
@@ -380,6 +388,7 @@ export default function EncuestaSatisfaccionPage() {
         let stagnantLoops = 0;
         while (!done && safety-- > 0) {
           const res  = await fetch("/api/encuesta-satisfaccion/analisis/process", { method: "POST", headers, body });
+          if (await waitIfRateLimited(res)) continue;
           const json = await res.json();
           if (!res.ok) throw new Error(json.error ?? "Error procesando chunks");
           const terminal = (json.counts.completado ?? 0) + (json.counts.error_final ?? 0);
@@ -406,6 +415,7 @@ export default function EncuestaSatisfaccionPage() {
         let stagnantLoops = 0;
         while (!done && safety-- > 0) {
           const res  = await fetch("/api/encuesta-satisfaccion/analisis/consolidate", { method: "POST", headers, body });
+          if (await waitIfRateLimited(res)) continue;
           const json = await res.json();
           if (!res.ok) throw new Error(json.error ?? "Error consolidando");
           const terminal = (json.counts.completado ?? 0) + (json.counts.error ?? 0);

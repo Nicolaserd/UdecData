@@ -2,7 +2,7 @@
  * Normalize all programa_academico values in the DB using the fuzzy matcher.
  * Merges duplicates that differ only in capitalization/accents.
  *
- * Run: npx tsx scripts/normalize-programs-db.ts
+ * Run: pnpm exec tsx scripts/normalize-programs-db.ts
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";

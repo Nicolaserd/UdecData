@@ -1,6 +1,6 @@
 /**
  * Revert the bad renames made by the first normalize script run.
- * Run: npx tsx scripts/revert-bad-renames.ts
+ * Run: pnpm exec tsx scripts/revert-bad-renames.ts
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";

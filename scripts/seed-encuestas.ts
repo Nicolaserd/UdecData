@@ -1,10 +1,11 @@
 /**
  * Seed script: carga encuestas_docentes.xlsx y encuestas_estudiantes.xlsx en la BD.
- * Ejecutar con: npx tsx scripts/seed-encuestas.ts
+ * Ejecutar con: pnpm exec tsx scripts/seed-encuestas.ts
  */
 import "dotenv/config";
 import * as XLSX from "xlsx";
 import path from "path";
+import fs from "fs";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -72,7 +73,7 @@ function extractPrograma(row: Record<string, unknown>): string | null {
 
 // ── DOCENTES ──────────────────────────────────────────────────────────────────
 async function seedDocentes() {
-  const wb   = XLSX.readFile(path.join(process.cwd(), "encuestas_docentes.xlsx"));
+  const wb   = XLSX.read(fs.readFileSync(path.join(process.cwd(), "encuestas_docentes.xlsx")), { type: "buffer" });
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
     wb.Sheets[wb.SheetNames[0]],
     { defval: null }
@@ -108,7 +109,7 @@ async function seedDocentes() {
 
 // ── ESTUDIANTES ───────────────────────────────────────────────────────────────
 async function seedEstudiantes() {
-  const wb   = XLSX.readFile(path.join(process.cwd(), "encuentros", "encuestas_estudiantes.xlsx"));
+  const wb   = XLSX.read(fs.readFileSync(path.join(process.cwd(), "encuentros", "encuestas_estudiantes.xlsx")), { type: "buffer" });
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
     wb.Sheets["Encuestas Estudiantes"],
     { defval: null }

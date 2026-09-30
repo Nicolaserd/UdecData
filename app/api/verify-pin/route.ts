@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isValidPin } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,10 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ valid: false }, { status: 400 });
     }
 
-    const expected = process.env.PIN_REGISTRO_BD;
-    const valid = pin === expected;
-
-    return NextResponse.json({ valid });
+    return NextResponse.json({ valid: isValidPin(pin) });
   } catch {
     return NextResponse.json({ valid: false }, { status: 400 });
   }

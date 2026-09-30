@@ -1,6 +1,6 @@
 /**
  * Test script to validate fuzzy matching with real data + simulated typos.
- * Run with: npx tsx scripts/test-fuzzy.ts
+ * Run with: pnpm exec tsx scripts/test-fuzzy.ts
  */
 
 import { fuzzyMatch } from "../lib/normalization/fuzzy-matcher";

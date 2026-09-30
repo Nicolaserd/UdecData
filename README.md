@@ -4,7 +4,7 @@ Aplicacion web institucional que centraliza reportes academicos, analitica
 institucional, pronostico de poblacion estudiantil, gestion de Encuentros
 Dialogicos y agentes de IA para consulta y soporte.
 
-El proyecto esta construido con Next.js App Router y usa PostgreSQL/Supabase
+El proyecto esta construido con Next.js App Router y usa PostgreSQL (Neon)
 como fuente principal de datos. El modulo de agentes de IA puede consultar la
 base de datos en modo solo lectura para responder preguntas institucionales con
 datos reales.
@@ -22,7 +22,7 @@ datos reales.
 - Agrupacion por categoria, unidad regional, nivel, nivel academico, programa,
   anio y periodo.
 - Exportacion de `ESTUDIANTES.xlsx` con estructura institucional.
-- Persistencia en Supabase mediante Prisma, con validacion previa de datos
+- Persistencia en Neon (PostgreSQL) mediante Prisma, con validacion previa de datos
   existentes y confirmacion de sobrescritura por categoria.
 - Dashboard con filtros, tarjetas resumen, graficas por periodo, distribucion,
   radar por sede, top programas y descarga completa de la base.
@@ -260,7 +260,7 @@ la burbuja de progreso y luego guarda la respuesta final en BD.
 | Lucide React | Iconografia |
 | Recharts | Graficas del dashboard y pronostico |
 | Prisma v7 | ORM para PostgreSQL |
-| Supabase/PostgreSQL | Base de datos institucional |
+| Neon/PostgreSQL | Base de datos institucional |
 | pg | Consultas read-only directas desde el agente analista |
 | PapaParse | Lectura de CSV |
 | SheetJS (`xlsx`) | Lectura y escritura de Excel |
@@ -349,8 +349,8 @@ scripts/
 
 | Variable | Descripcion |
 |---|---|
-| `DATABASE_URL` | Connection string de Supabase/PostgreSQL usada por Prisma y consultas read-only |
-| `DIRECT_URL` | Connection string directo para migraciones |
+| `DATABASE_URL` | Connection string pooled de Neon (en `.env`) usada por Prisma y consultas read-only |
+| `DIRECT_URL` | Connection string directo de Neon para migraciones (en `.env`) |
 | `GROQ_API_KEY` | API key del proveedor Groq |
 | `CEREBRAS_API_KEY` | API key del proveedor Cerebras |
 | `KIMI_API_KEY` | API key del proveedor Kimi/Moonshot |
@@ -363,20 +363,20 @@ el siguiente disponible.
 ## Instalacion y desarrollo
 
 ```bash
-npm install
-npx prisma generate
-npx prisma migrate deploy
-npm run dev
+pnpm install
+pnpm exec prisma generate
+pnpm exec prisma migrate deploy
+pnpm dev
 ```
 
 Comandos utiles:
 
 ```bash
-npm run build
-npm run lint
-npx tsx scripts/seed-historico.ts
-npx tsx scripts/normalize-db.ts
-npx tsx scripts/test-fuzzy.ts
+pnpm build
+pnpm lint
+pnpm exec tsx scripts/seed-historico.ts
+pnpm exec tsx scripts/normalize-db.ts
+pnpm exec tsx scripts/test-fuzzy.ts
 ```
 
 ## Deploy en Vercel

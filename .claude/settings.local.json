@@ -2,12 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(sed 's/<si><t>//g')",
-      "Bash(npm install:*)",
-      "Bash(npx shadcn@latest add button card table progress badge -y)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm dlx shadcn@latest add:*)",
       "Bash(grep -iv \"^PROGRAMA$\")",
-      "Bash(npx prisma:*)",
-      "Bash(npx next:*)",
-      "Bash(npx tsx:*)"
+      "Bash(pnpm exec prisma:*)",
+      "Bash(pnpm exec next:*)",
+      "Bash(pnpm exec tsx:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

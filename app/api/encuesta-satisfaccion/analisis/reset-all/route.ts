@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isValidPin } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -10,10 +11,9 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const { pin } = (await request.json()) as { pin?: string };
-    const expected = process.env.PIN_REGISTRO_BD;
 
-    if (!expected) return NextResponse.json({ error: "PIN no configurado en el servidor" }, { status: 500 });
-    if (!pin || pin !== expected) return NextResponse.json({ error: "PIN inválido" }, { status: 401 });
+    if (!process.env.PIN_REGISTRO_BD) return NextResponse.json({ error: "PIN no configurado en el servidor" }, { status: 500 });
+    if (!isValidPin(pin)) return NextResponse.json({ error: "PIN inválido" }, { status: 401 });
 
     const [chunks, consolidados, informes] = await prisma.$transaction([
       prisma.satisfaccionAnalisisChunk.deleteMany({}),

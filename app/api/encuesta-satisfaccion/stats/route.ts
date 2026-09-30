@@ -76,10 +76,10 @@ export async function GET(request: NextRequest) {
       prisma.encuestaSatisfaccion.count({
         where: { ...where, nivel_satisfaccion: { not: null } },
       }),
-      prisma.encuestaSatisfaccion.findMany({
+      // groupBy se resuelve en SQL; findMany+distinct traía todas las filas y deduplicaba en Node
+      prisma.encuestaSatisfaccion.groupBy({
+        by:    ["respuesta_id", "anio", "periodo_academico"],
         where,
-        select:   { respuesta_id: true, anio: true, periodo_academico: true },
-        distinct: ["respuesta_id", "anio", "periodo_academico"],
       }),
     ]);
 
@@ -89,10 +89,10 @@ export async function GET(request: NextRequest) {
 
     // ── Filtros disponibles ───────────────────────────────────────────────────
     const [anios, periodos, sedesList, rolesList] = await Promise.all([
-      prisma.encuestaSatisfaccion.findMany({ select: { anio: true },              distinct: ["anio"],              orderBy: { anio: "desc" } }),
-      prisma.encuestaSatisfaccion.findMany({ select: { periodo_academico: true }, distinct: ["periodo_academico"] }),
-      prisma.encuestaSatisfaccion.findMany({ select: { sede: true },              distinct: ["sede"],              orderBy: { sede: "asc" } }),
-      prisma.encuestaSatisfaccion.findMany({ select: { rol: true },               distinct: ["rol"],               orderBy: { rol: "asc" } }),
+      prisma.encuestaSatisfaccion.groupBy({ by: ["anio"],              orderBy: { anio: "desc" } }),
+      prisma.encuestaSatisfaccion.groupBy({ by: ["periodo_academico"] }),
+      prisma.encuestaSatisfaccion.groupBy({ by: ["sede"],              orderBy: { sede: "asc" } }),
+      prisma.encuestaSatisfaccion.groupBy({ by: ["rol"],               orderBy: { rol: "asc" } }),
     ]);
 
     return NextResponse.json({

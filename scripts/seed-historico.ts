@@ -2,8 +2,8 @@
  * Script to load ESTUDIANTES.xlsx historical data into Supabase via Prisma.
  * Normalizes programa, unidad regional, and nivel using the fuzzy matcher.
  *
- * Run with: npx tsx scripts/seed-historico.ts
- * To force re-seed: npx tsx scripts/seed-historico.ts --force
+ * Run with: pnpm exec tsx scripts/seed-historico.ts
+ * To force re-seed: pnpm exec tsx scripts/seed-historico.ts --force
  */
 
 import "dotenv/config";

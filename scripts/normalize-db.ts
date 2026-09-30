@@ -3,7 +3,7 @@
  * - nivel: "pregrado" → "Pregrado", "posgrado" → "Posgrado", etc.
  * - periodo: "1" → "IPA", "2" → "IIPA"
  *
- * Run: npx tsx scripts/normalize-db.ts
+ * Run: pnpm exec tsx scripts/normalize-db.ts
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
