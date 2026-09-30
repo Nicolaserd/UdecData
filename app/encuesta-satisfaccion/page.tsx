@@ -23,7 +23,7 @@ import {
 import { NavBar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { PinModal } from "@/components/reports/pin-modal";
-import { describeHttpError, ensureApiOk, errorMessage, readApiJson, verifyPinRequest } from "@/lib/api-errors";
+import { describeHttpError, ensureApiOk, errorMessage, hasVerifiedPin, pinHeaders, readApiJson, verifyPinRequest } from "@/lib/api-errors";
 
 /** Si el servidor respondió 429, espera Retry-After y devuelve true para reintentar. */
 async function waitIfRateLimited(res: Response): Promise<boolean> {
@@ -196,6 +196,7 @@ export default function EncuestaSatisfaccionPage() {
 
   // ── Reset (borrado manual con PIN) de las 3 tablas de análisis
   const [resetPinOpen, setResetPinOpen] = useState(false);
+  const [llmPinOpen, setLlmPinOpen] = useState(false);
   const [resetMessage, setResetMessage] = useState<string>("");
   const [filterAnio,    setFilterAnio]    = useState<string>("");
   const [filterPeriodo, setFilterPeriodo] = useState<string>("");
@@ -254,7 +255,7 @@ export default function EncuestaSatisfaccionPage() {
       fd.append("file", form.file);
       fd.append("anio", form.anio);
       fd.append("periodo_academico", form.periodo);
-      const res  = await fetch("/api/encuesta-satisfaccion/upload", { method: "POST", body: fd });
+      const res  = await fetch("/api/encuesta-satisfaccion/upload", { method: "POST", headers: pinHeaders(), body: fd });
       const json = await readApiJson<any>(res, "guardar la encuesta en la base de datos");
       setForm((p) => ({ ...p, uploadState: "success", message: json.message, warnings: json.warnings ?? [] }));
       setPreviewOpen(false);
@@ -358,7 +359,7 @@ export default function EncuestaSatisfaccionPage() {
     setLlmError("");
     setLlmUrl("");
     const body = JSON.stringify({ anio: llmAnio, periodo: llmPeriodo });
-    const headers = { "Content-Type": "application/json" };
+    const headers = { "Content-Type": "application/json", ...pinHeaders() };
 
     try {
       // 1. Start: crear chunks
@@ -461,6 +462,20 @@ export default function EncuestaSatisfaccionPage() {
         <PinModal
           onConfirm={verifyPin}
           onCancel={() => setPinOpen(false)}
+        />
+      )}
+
+      {llmPinOpen && (
+        <PinModal
+          onConfirm={async (pin) => {
+            const result = await verifyPinRequest(pin);
+            if (result === true) {
+              setLlmPinOpen(false);
+              void generateLlmReport();
+            }
+            return result;
+          }}
+          onCancel={() => setLlmPinOpen(false)}
         />
       )}
 
@@ -798,7 +813,7 @@ export default function EncuestaSatisfaccionPage() {
               </button>
 
               <button type="button"
-                onClick={generateLlmReport}
+                onClick={() => (hasVerifiedPin() ? generateLlmReport() : setLlmPinOpen(true))}
                 disabled={!llmAnio || !llmPeriodo || llmBusy}
                 className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#00682f_0%,#00843d_100%)] px-5 py-3 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50">
                 {llmBusy

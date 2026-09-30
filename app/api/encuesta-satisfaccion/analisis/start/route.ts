@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requirePin } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
 import { cleanComentarios, chunkComentarios } from "@/lib/analisis/chunk-comentarios";
 
@@ -11,6 +12,10 @@ export const maxDuration = 60;
  * Resetea análisis anterior para el mismo (anio, periodo).
  */
 export async function POST(request: NextRequest) {
+  // Escribe en la BD: exige el PIN de registro también en el servidor
+  const denied = requirePin(request);
+  if (denied) return denied;
+
   try {
     const { anio: anioRaw, periodo: periodoRaw } = await request.json();
     const anio    = Number(anioRaw);

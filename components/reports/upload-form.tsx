@@ -24,7 +24,7 @@ import { FileUploadZone } from "./file-upload-zone";
 import { ResultsTable } from "./results-table";
 import { ConfirmOverwrite } from "./confirm-overwrite";
 import { PinModal } from "./pin-modal";
-import { ensureApiOk, errorMessage, readApiJson, verifyPinRequest } from "@/lib/api-errors";
+import { ensureApiOk, errorMessage, pinHeaders, readApiJson, verifyPinRequest } from "@/lib/api-errors";
 
 type AggregatedRow = Record<string, string | number>;
 
@@ -240,6 +240,7 @@ export const UploadForm = forwardRef<UploadFormHandle, UploadFormProps>(
 
           const response = await fetch("/api/process-reports", {
             method: "POST",
+            headers: pinHeaders(),
             body: formData,
           });
 

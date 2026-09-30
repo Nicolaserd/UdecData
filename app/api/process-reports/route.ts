@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requirePin } from "@/lib/security";
 import { describeServerError } from "@/lib/server-errors";
 import { parseMatriculados } from "@/lib/parsers/parse-matriculados";
 import { parseAdmitidos } from "@/lib/parsers/parse-admitidos";
@@ -13,6 +14,10 @@ import { readFileAsCSV } from "@/lib/parsers/read-file";
 import { NormalizedStudentRow } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
+  // Escribe en la BD: exige el PIN de registro también en el servidor
+  const denied = requirePin(request);
+  if (denied) return denied;
+
   try {
     const formData = await request.formData();
 

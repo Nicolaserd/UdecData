@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requirePin } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
 import {
   normalizePrograma,
@@ -12,7 +13,11 @@ import {
   computePlanMejoramiento,
 } from "@/lib/normalize-text";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // Escribe en la BD: exige el PIN de registro también en el servidor
+  const denied = requirePin(request);
+  if (denied) return denied;
+
   try {
     let updatedEst = 0;
     let updatedDo = 0;

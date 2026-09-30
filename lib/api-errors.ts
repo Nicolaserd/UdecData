@@ -60,6 +60,7 @@ export async function readApiJson<T = Record<string, unknown>>(res: Response, ac
   try { json = text ? JSON.parse(text) : {}; } catch { /* no es JSON */ }
 
   if (!res.ok) {
+    if (res.status === 401) verifiedPin = null; // PIN rechazado: se pedirá de nuevo
     const serverMessage = json && typeof json === "object" && "error" in json
       ? String((json as { error: unknown }).error)
       : undefined;
@@ -90,6 +91,24 @@ export function errorMessage(err: unknown, action: string): string {
 }
 
 // ── PIN ──────────────────────────────────────────────────────────────────────
+// El servidor exige el PIN en cada ruta que escribe en la BD (encabezado
+// x-registro-pin). Tras verificarlo se guarda SOLO en memoria de esta pestaña
+// (nunca en localStorage/cookies): al recargar la página se vuelve a pedir.
+
+let verifiedPin: string | null = null;
+
+export function hasVerifiedPin(): boolean {
+  return verifiedPin !== null;
+}
+
+/** Encabezado con el PIN para las solicitudes que guardan datos. */
+export function pinHeaders(): Record<string, string> {
+  return verifiedPin ? { "x-registro-pin": verifiedPin } : {};
+}
+
+export function forgetPin(): void {
+  verifiedPin = null;
+}
 
 /** true = PIN válido; string = mensaje de error específico para mostrar en el modal. */
 export async function verifyPinRequest(pin: string): Promise<true | string> {
@@ -110,7 +129,11 @@ export async function verifyPinRequest(pin: string): Promise<true | string> {
   let data: { valid?: boolean; error?: string } = {};
   try { data = await res.json(); } catch { /* respuesta no JSON */ }
 
-  if (res.ok && data.valid) return true;
+  if (res.ok && data.valid) {
+    verifiedPin = pin;
+    return true;
+  }
+  verifiedPin = null;
   if (res.ok || res.status === 401) {
     const remaining = Number(res.headers.get("X-RateLimit-Remaining"));
     const tail = Number.isFinite(remaining)

@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { NavBar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
-import { errorMessage, readApiJson } from "@/lib/api-errors";
+import { errorMessage, hasVerifiedPin, pinHeaders, readApiJson, verifyPinRequest } from "@/lib/api-errors";
+import { PinModal } from "@/components/reports/pin-modal";
 
 // ─── Columnas requeridas ──────────────────────────────────────────────────────
 
@@ -801,6 +802,13 @@ export default function EncuentrosDialogicosPage() {
   const [encEst,  setEncEst]  = useState<EncuestaSection>(initialEncuestaSection());
   const [encDoc,  setEncDoc]  = useState<EncuestaSection>(initialEncuestaSection());
   const [encModal,setEncModal]= useState<EncuestaModalState>({ open: false, tipo: "estudiantes", data: null });
+
+  // Guardado pendiente mientras se pide el PIN (se pide una vez por pestaña)
+  const [pendingSave, setPendingSave] = useState<null | (() => Promise<void>)>(null);
+  const withPin = useCallback((save: () => Promise<void>) => {
+    if (hasVerifiedPin()) void save();
+    else setPendingSave(() => save);
+  }, []);
   const [encStats,    setEncStats]     = useState<EncuestaStatsResponse | null>(null);
   const [encStatsLoading, setEncStatsLoading] = useState(false);
   const [encAnio,     setEncAnio]      = useState<string>("");
@@ -860,7 +868,7 @@ export default function EncuentrosDialogicosPage() {
       const endpoint = tipo === "estudiantes"
         ? "/api/encuentros-dialogicos/upload-encuesta-estudiantes"
         : "/api/encuentros-dialogicos/upload-encuesta-docentes";
-      const res  = await fetch(endpoint, { method: "POST", body: fd });
+      const res  = await fetch(endpoint, { method: "POST", headers: pinHeaders(), body: fd });
       const json = await readApiJson<any>(res, `guardar la encuesta de ${tipo} en la base de datos`);
       setter((p) => ({ ...p, uploadState: "success", message: json.message, warnings: json.warnings ?? [], inserted: json.inserted ?? 0 }));
       setEncModal({ open: false, tipo: "estudiantes", data: null });
@@ -913,7 +921,7 @@ export default function EncuentrosDialogicosPage() {
       const endpoint = tipo === "estudiantes"
         ? "/api/encuentros-dialogicos/upload-estudiantes"
         : "/api/encuentros-dialogicos/upload-docentes";
-      const res  = await fetch(endpoint, { method: "POST", body: fd });
+      const res  = await fetch(endpoint, { method: "POST", headers: pinHeaders(), body: fd });
       const json = await readApiJson<any>(res, `guardar el plan de mejoramiento de ${tipo} en la base de datos`);
       setter((p) => ({
         ...p,
@@ -942,11 +950,27 @@ export default function EncuentrosDialogicosPage() {
     <main className="flex min-h-screen flex-col bg-[#f8f9fa] font-home-body text-[#191c1d] pt-16">
       <NavBar activePage="encuentros-dialogicos" />
 
+      {/* PIN antes de guardar en la BD (el servidor también lo exige) */}
+      {pendingSave && (
+        <PinModal
+          onConfirm={async (pin) => {
+            const result = await verifyPinRequest(pin);
+            if (result === true) {
+              const save = pendingSave;
+              setPendingSave(null);
+              void save();
+            }
+            return result;
+          }}
+          onCancel={() => setPendingSave(null)}
+        />
+      )}
+
       {/* Modal planes */}
       <PreviewModal
         modal={modal}
         uploading={isUploading}
-        onConfirm={runUpload}
+        onConfirm={() => withPin(runUpload)}
         onCancel={() => setModal((m) => ({ ...m, open: false }))}
       />
 
@@ -954,7 +978,7 @@ export default function EncuentrosDialogicosPage() {
       <EncuestaPreviewModal
         modal={encModal}
         uploading={isEncUploading}
-        onConfirm={runEncuestaUpload}
+        onConfirm={() => withPin(runEncuestaUpload)}
         onCancel={() => setEncModal((m) => ({ ...m, open: false }))}
       />
 
