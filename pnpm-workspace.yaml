@@ -23,3 +23,4 @@ overrides:
   'browserslist@<4.28.7': ^4.28.7                         # next > styled-jsx > @babel/core
   'baseline-browser-mapping@>=2.0.0 <2.11.0': ^2.11.0     # next
   '@babel/core@<7.29.6': ^7.29.6                          # next > styled-jsx
+  'source-map-js@>=1.0.0 <1.2.2': ^1.2.2                  # next > postcss
