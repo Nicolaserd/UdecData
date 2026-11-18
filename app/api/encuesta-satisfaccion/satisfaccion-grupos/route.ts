@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx-js-style";
 import { prisma } from "@/lib/prisma";
 import { normKey } from "@/lib/parsers/encuesta-satisfaccion";
-import { injectBarChart } from "@/lib/excel-chart";
+import { injectCharts, type ChartOpts } from "@/lib/excel-chart";
 
 export const runtime     = "nodejs";
 export const maxDuration = 60;
@@ -194,6 +194,9 @@ type RawCell =
   | { kind: "chartTitle";   text: string }
   | { kind: "resumenArea"; text: string }
   | { kind: "resumenPct";  value: number }
+  | { kind: "count";       value: number }
+  | { kind: "totalCount";  value: number }
+  | { kind: "na" }
   | null;
 
 function cellFor(raw: RawCell): XLSX.CellObject | null {
@@ -210,6 +213,9 @@ function cellFor(raw: RawCell): XLSX.CellObject | null {
     case "chartTitle": return { t: "s", v: raw.text, s: styleChartTitle };
     case "resumenArea": return { t: "s", v: raw.text, s: styleResumenAreaCell };
     case "resumenPct":  return { t: "n", v: raw.value, z: '0"%"', s: styleResumenPctCell };
+    case "count":       return { t: "n", v: raw.value, z: "0", s: styleData };
+    case "totalCount":  return { t: "n", v: raw.value, z: "0", s: styleTotalData };
+    case "na":          return { t: "s", v: "—", s: styleData };
   }
 }
 
@@ -272,11 +278,28 @@ function orderUnidades(list: string[]): string[] {
 type VarDef = { key: string; label: string };
 type Entry  = { label: string; counts: number[] };
 
+/** Chart relativo a una hoja; el índice y nombre de la hoja se completan al armar el libro. */
+type SheetChart = Omit<ChartOpts, "sheetIndex" | "sheetName">;
+
+/** Filas (0-based) de un bloque: título, encabezado, primera fila de datos y fila "Total". */
+type Bloque = { title: number; header: number; first: number; total: number };
+
+type DetalleCtx = {
+  grid:    RawCell[][];
+  merges:  XLSX.Range[];
+  charts:  SheetChart[];
+  bloques: { grupo: Bloque; unidad: Bloque; variable: Bloque };
+  periodo: string;
+  anio:    number;
+};
+
 type DetalleTabla = {
   sheet:  string;   // nombre de la pestaña (≤31 chars, único)
   titulo: string;   // título dentro de la hoja
   fetch:  (anio: number, periodo: string) => Promise<Array<Record<string, unknown>>>;
   vars:   VarDef[]; // variables en escala de satisfacción
+  /** Contenido adicional (tablas y gráficas) debajo de los bloques de satisfacción. */
+  extra?: (rows: Array<Record<string, unknown>>, ctx: DetalleCtx) => void;
 };
 
 const VARS_ATENCION: VarDef[] = [
@@ -335,6 +358,7 @@ const DETALLE_TABLAS: DetalleTabla[] = [
     vars: [
       { key: "comunicaciones", label: "Satisfacción con las comunicaciones" },
     ],
+    extra: buildComunicacionesExtra,
   },
   {
     sheet: "Biblioclic", titulo: "Satisfacción · Biblioclic",
@@ -388,7 +412,7 @@ function tally(rows: Array<Record<string, unknown>>, vars: VarDef[]) {
 function pushBlock(
   grid: RawCell[][], merges: XLSX.Range[], nCols: number,
   blockTitle: string, dimLabel: string, entries: Entry[],
-): void {
+): Bloque {
   const r0 = grid.length;
   grid.push([{ kind: "areaTitle", text: blockTitle }]);
   merges.push({ s: { r: r0, c: 0 }, e: { r: r0, c: nCols - 1 } });
@@ -417,18 +441,21 @@ function pushBlock(
   for (let i = 0; i < 5; i++) totalRow.push({ kind: "totalData", value: gtot > 0 ? grand[i] / gtot : 0 });
   const gsat = grand[3] + grand[4];
   totalRow.push({ kind: "totalData", value: gtot > 0 ? gsat / gtot : 0, highlight: true });
+  const total = grid.length;
   grid.push(totalRow);
   grid.push([null]);
+  return { title: r0, header: r0 + 1, first: r0 + 2, total };
 }
 
 const DETALLE_COLS: XLSX.ColInfo[] = [
-  { wch: 36 }, { wch: 16 }, { wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 16 }, { wch: 20 },
+  { wch: 46 }, { wch: 16 }, { wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 16 }, { wch: 20 },
 ];
 
 function buildDetalleSheet(
-  rows: Array<Record<string, unknown>>, vars: VarDef[],
-  titulo: string, periodo: string, anio: number,
-): XLSX.WorkSheet | null {
+  rows: Array<Record<string, unknown>>, tabla: DetalleTabla,
+  periodo: string, anio: number,
+): { ws: XLSX.WorkSheet; charts: SheetChart[] } | null {
+  const { vars, titulo } = tabla;
   const nCols = 1 + NIVELES.length + 1;
   const { byGrupo, byUnidad, byVar, total } = tally(rows, vars);
   if (total.reduce((s, x) => s + x, 0) === 0) return null;
@@ -446,11 +473,259 @@ function buildDetalleSheet(
   const unidadEntries: Entry[] = orderUnidades([...byUnidad.keys()]).map((u) => ({ label: u, counts: byUnidad.get(u)! }));
   const varEntries:    Entry[] = vars.filter((v) => byVar.has(v.key)).map((v) => ({ label: v.label, counts: byVar.get(v.key)! }));
 
-  pushBlock(grid, merges, nCols, "Por grupo de interés", "Grupo de Interés", grupoEntries);
-  pushBlock(grid, merges, nCols, "Por unidad regional",  "Unidad Regional",  unidadEntries);
-  pushBlock(grid, merges, nCols, "Por pregunta evaluada", "Pregunta / Variable", varEntries);
+  const bloques = {
+    grupo:    pushBlock(grid, merges, nCols, "Por grupo de interés", "Grupo de Interés", grupoEntries),
+    unidad:   pushBlock(grid, merges, nCols, "Por unidad regional",  "Unidad Regional",  unidadEntries),
+    variable: pushBlock(grid, merges, nCols, "Por pregunta evaluada", "Pregunta / Variable", varEntries),
+  };
 
-  return gridToSheet(grid, merges, DETALLE_COLS, nCols);
+  const charts: SheetChart[] = [];
+  tabla.extra?.(rows, { grid, merges, charts, bloques, periodo, anio });
+
+  return { ws: gridToSheet(grid, merges, DETALLE_COLS, nCols), charts };
+}
+
+// ─── Comunicaciones: gráficas de satisfacción + preguntas de percepción ──────
+// Las preguntas de tono, canales y emoción no usan la escala de satisfacción:
+// se tabulan como % de personas por grupo de interés que eligió cada opción.
+// Las opciones de tono y canales salen de los datos, así cualquier encuesta
+// cargada (otro periodo/año, canales nuevos) se refleja sin tocar el código.
+
+const OTRA_RESPUESTA = "Otra respuesta";
+const CHART_COL_FROM = 8;   // columna I
+const CHART_COL_TO   = 17;  // columna R
+const CHART_ROWS     = 18;  // alto de cada gráfica en filas
+
+type OpcionFija = { label: string; match: (k: string) => boolean };
+
+type PreguntaCat = {
+  key:    string;
+  titulo: string;
+  dim:    string;            // encabezado de la columna de opciones
+  nota?:  string;
+  multi?: boolean;           // selección múltiple separada por ";"
+  opciones?: OpcionFija[];   // si no se define, las opciones salen de los datos (orden desc)
+  chart:  "bar" | "col" | "pie";
+};
+
+const PREGUNTAS_COMUNICACIONES: PreguntaCat[] = [
+  {
+    key: "tono_comunicacion", dim: "Tono",
+    titulo: "Tono de la comunicación de la Oficina Asesora de Comunicaciones en sus canales y productos",
+    chart: "col",
+  },
+  {
+    key: "canales_uso", dim: "Canal", multi: true,
+    titulo: "Canales que usa para enterarse de las actividades y temas de la Universidad",
+    nota: "Selección múltiple: % de personas que eligió cada canal (la suma puede superar el 100%).",
+    chart: "bar",
+  },
+  {
+    key: "tono_redes", dim: "Respuesta",
+    titulo: "¿Los mensajes en redes sociales están redactados en un tono cercano y amigable?",
+    opciones: [
+      { label: "Sí", match: (k) => k === "si" },
+      { label: "No", match: (k) => k === "no" },
+    ],
+    chart: "pie",
+  },
+  {
+    key: "tono_emocion", dim: "Se siente como…",
+    titulo: "El tono de los mensajes y contenidos de la oficina de comunicaciones le hace sentir",
+    nota: "Las respuestas libres que no corresponden a una opción se agrupan en \"Otra respuesta\".",
+    opciones: [
+      { label: "Miembro cercano y familiar de la comunidad",     match: (k) => k.includes("miembro cercano") },
+      { label: "Persona que necesita informarse de servicios",   match: (k) => k.includes("necesite informarse") || k.includes("necesita informarse") },
+      { label: "Ciudadano que necesita estar actualizado",       match: (k) => k.includes("ciudadano") },
+      { label: "Individuo que no hace parte de la Universidad",  match: (k) => k.includes("no hace parte") },
+    ],
+    chart: "bar",
+  },
+];
+
+type ConteoPregunta = {
+  orden:    string[];
+  personas: Map<string, number>;               // columna (grupo | "Total") → personas
+  cuenta:   Map<string, Map<string, number>>;  // opción → columna → personas
+};
+
+function contarPregunta(rows: Array<Record<string, unknown>>, p: PreguntaCat): ConteoPregunta {
+  const personas = new Map<string, number>();
+  const cuenta   = new Map<string, Map<string, number>>();
+  const etiquetas = new Map<string, string>(); // clave normalizada → etiqueta (opciones dinámicas)
+  const inc = <K>(m: Map<K, number>, k: K) => m.set(k, (m.get(k) ?? 0) + 1);
+
+  for (const r of rows) {
+    const raw = String(r[p.key] ?? "").trim();
+    if (!raw) continue;
+    const partes = p.multi ? raw.split(";") : [raw];
+    const elegidas = new Set<string>();
+    for (const parte of partes) {
+      const txt = parte.trim();
+      const k = normKey(txt);
+      if (!/[a-z0-9]/.test(k)) continue; // respuestas vacías como "." o "-"
+      let label: string;
+      if (p.opciones) {
+        label = p.opciones.find((o) => o.match(k))?.label ?? OTRA_RESPUESTA;
+      } else {
+        if (!etiquetas.has(k)) etiquetas.set(k, txt.charAt(0).toUpperCase() + txt.slice(1));
+        label = etiquetas.get(k)!;
+      }
+      elegidas.add(label);
+    }
+    if (elegidas.size === 0) continue;
+
+    const grupo = normalizeRol(String(r.rol ?? ""));
+    const cols  = grupo ? [grupo, "Total"] : ["Total"];
+    for (const c of cols) {
+      inc(personas, c);
+      for (const e of elegidas) {
+        let m = cuenta.get(e);
+        if (!m) { m = new Map(); cuenta.set(e, m); }
+        inc(m, c);
+      }
+    }
+  }
+
+  const totalDe = (label: string) => cuenta.get(label)?.get("Total") ?? 0;
+  const orden = p.opciones
+    ? [...p.opciones.map((o) => o.label), OTRA_RESPUESTA].filter((l) => totalDe(l) > 0)
+    : [...cuenta.keys()].sort((a, b) => totalDe(b) - totalDe(a) || a.localeCompare(b, "es"));
+  return { orden, personas, cuenta };
+}
+
+const colLetter = (c: number) => XLSX.utils.encode_col(c);
+
+/** Valores numéricos de una columna del grid (para cachear en la gráfica). */
+function numsAt(grid: RawCell[][], r1: number, r2: number, c: number): number[] {
+  const out: number[] = [];
+  for (let r = r1; r <= r2; r++) {
+    const cell = grid[r]?.[c];
+    out.push(cell && "value" in cell ? cell.value : 0);
+  }
+  return out;
+}
+
+function textsAt(grid: RawCell[][], r1: number, r2: number, c: number): string[] {
+  const out: string[] = [];
+  for (let r = r1; r <= r2; r++) {
+    const cell = grid[r]?.[c];
+    out.push(cell && "text" in cell ? cell.text : "");
+  }
+  return out;
+}
+
+function buildComunicacionesExtra(rows: Array<Record<string, unknown>>, ctx: DetalleCtx): void {
+  const { grid, merges, charts, bloques, periodo, anio } = ctx;
+  const sufijo = `${periodo} ${anio}`;
+
+  // Gráfica 1: nivel de satisfacción con las comunicaciones por grupo de interés (incluye Total).
+  const g = bloques.grupo;
+  const COL_SAT = 1 + NIVELES.length; // columna G
+  charts.push({
+    kind: "col",
+    title: `Satisfacción con las comunicaciones por grupo de interés — ${sufijo}`,
+    catRange: `$A$${g.first + 1}:$A$${g.total + 1}`,
+    valRange: `$${colLetter(COL_SAT)}$${g.first + 1}:$${colLetter(COL_SAT)}$${g.total + 1}`,
+    serNameRef: `$${colLetter(COL_SAT)}$${g.header + 1}`,
+    serName: "Nivel de satisfacción",
+    numFmt: "0.0%", valMax: 1, valMajorUnit: 0.25,
+    fromCol: CHART_COL_FROM, fromRow: g.title,
+    toCol: CHART_COL_TO, toRow: g.title + CHART_ROWS,
+    cache: { cats: textsAt(grid, g.first, g.total, 0), vals: numsAt(grid, g.first, g.total, COL_SAT) },
+  });
+
+  // Gráfica 2: distribución por nivel (fila "Total" del bloque por grupo), al lado de la anterior.
+  const nivelesCats = `$B$${g.header + 1}:$${colLetter(NIVELES.length)}$${g.header + 1}`;
+  charts.push({
+    kind: "col",
+    title: `Distribución por nivel de satisfacción — Comunicaciones ${sufijo}`,
+    catRange: nivelesCats,
+    valRange: `$B$${g.total + 1}:$${colLetter(NIVELES.length)}$${g.total + 1}`,
+    serNameRef: `$A$${g.total + 1}`,
+    serName: "Total",
+    numFmt: "0.0%", valMax: 1, valMajorUnit: 0.25,
+    fromCol: CHART_COL_TO + 1, fromRow: g.title,
+    toCol: CHART_COL_TO + 10, toRow: g.title + CHART_ROWS,
+    cache: {
+      cats: [...NIVELES],
+      vals: NIVELES.map((_, i) => numsAt(grid, g.total, g.total, 1 + i)[0]),
+    },
+  });
+
+  // Secciones de percepción: cada tabla con su gráfica a la derecha.
+  const NC = 1 + GRUPOS.length + 1; // opción + 4 grupos + Total
+  let libre = Math.max(grid.length, g.title + CHART_ROWS + 2);
+  const padTo = (n: number) => { while (grid.length < n) grid.push([null]); };
+
+  const preguntas = PREGUNTAS_COMUNICACIONES
+    .map((p) => ({ p, c: contarPregunta(rows, p) }))
+    .filter(({ c }) => c.orden.length > 0);
+  if (preguntas.length === 0) return;
+
+  padTo(libre);
+  const sr = grid.length;
+  grid.push([{ kind: "title", text: `Percepción de las comunicaciones — ${sufijo}` }]);
+  merges.push({ s: { r: sr, c: 0 }, e: { r: sr, c: NC - 1 } });
+  grid.push([{ kind: "subtitle", text: "% de personas de cada grupo de interés que eligió cada opción, entre quienes respondieron la pregunta." }]);
+  merges.push({ s: { r: sr + 1, c: 0 }, e: { r: sr + 1, c: NC - 1 } });
+  grid.push([null]);
+
+  for (const { p, c } of preguntas) {
+    padTo(libre);
+    const r0 = grid.length;
+    grid.push([{ kind: "areaTitle", text: p.titulo }]);
+    merges.push({ s: { r: r0, c: 0 }, e: { r: r0, c: NC - 1 } });
+    if (p.nota) {
+      grid.push([{ kind: "subtitle", text: p.nota }]);
+      merges.push({ s: { r: r0 + 1, c: 0 }, e: { r: r0 + 1, c: NC - 1 } });
+    }
+
+    const header = grid.length;
+    grid.push([
+      { kind: "header", text: p.dim },
+      ...GRUPOS.map((gr) => ({ kind: "header" as const, text: gr })),
+      { kind: "header", text: "Total" },
+    ]);
+
+    const first = grid.length;
+    for (const label of c.orden) {
+      const m = c.cuenta.get(label)!;
+      const row: RawCell[] = [{ kind: "groupLabel", text: label }];
+      for (const gr of GRUPOS) {
+        const n = c.personas.get(gr) ?? 0;
+        row.push(n > 0 ? { kind: "data", value: (m.get(gr) ?? 0) / n } : { kind: "na" });
+      }
+      const nt = c.personas.get("Total") ?? 0;
+      row.push({ kind: "data", value: nt > 0 ? (m.get("Total") ?? 0) / nt : 0, highlight: true });
+      grid.push(row);
+    }
+    const last = grid.length - 1;
+
+    grid.push([
+      { kind: "totalLabel", text: "Personas que respondieron" },
+      ...GRUPOS.map((gr) => ({ kind: "totalCount" as const, value: c.personas.get(gr) ?? 0 })),
+      { kind: "totalCount", value: c.personas.get("Total") ?? 0 },
+    ]);
+    grid.push([null]);
+
+    const colTot = colLetter(NC - 1); // columna F
+    charts.push({
+      kind: p.chart,
+      title: `${p.titulo} — ${sufijo}`,
+      catRange: `$A$${first + 1}:$A$${last + 1}`,
+      valRange: `$${colTot}$${first + 1}:$${colTot}$${last + 1}`,
+      serNameRef: `$${colTot}$${header + 1}`,
+      serName: "Total",
+      numFmt: "0.0%",
+      ...(p.chart === "pie" ? {} : { valMax: 1, valMajorUnit: 0.25 }),
+      fromCol: CHART_COL_FROM, fromRow: r0,
+      toCol: CHART_COL_TO, toRow: r0 + CHART_ROWS,
+      cache: { cats: textsAt(grid, first, last, 0), vals: numsAt(grid, first, last, NC - 1) },
+    });
+
+    libre = Math.max(grid.length, r0 + CHART_ROWS + 2);
+  }
 }
 
 // ─── Hoja "Dimensiones de calidad" (SERVQUAL) ────────────────────────────────
@@ -738,22 +1013,16 @@ export async function GET(request: NextRequest) {
     const wsDim = buildDimensionesSheet(dimRows, periodo, anio);
     if (wsDim) XLSX.utils.book_append_sheet(wb, wsDim, "Dimensiones de calidad");
 
-    // Hojas de detalle por tabla (se omiten las que no tengan datos en el periodo)
-    DETALLE_TABLAS.forEach((t, i) => {
-      const ws = buildDetalleSheet(detalleRows[i], t.vars, t.titulo, periodo, anio);
-      if (ws) XLSX.utils.book_append_sheet(wb, ws, t.sheet);
-    });
+    // ─── Charts nativos (se inyectan al final, sobre el .xlsx ya escrito) ────
+    // SheetJS escribe sheetN.xml en el orden de SheetNames → índice = posición + 1.
+    const sheetIdx = (name: string) => wb.SheetNames.indexOf(name) + 1;
+    const charts: ChartOpts[] = [];
 
-    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-
-    // ─── Inyección de charts nativos ──────────────────────────────────────────
-    let body: Uint8Array = new Uint8Array(buffer);
-
-    // Chart 1: hoja "Resumen general" (sheet2.xml) — barras horizontales.
+    // Hoja "Resumen general" — barras horizontales.
     if (areasSorted.length > 0) {
       const lastRow1Based = 3 + areasSorted.length; // header en fila 3 → datos hasta 3+N
-      body = await injectBarChart(body, {
-        sheetIndex: 2,
+      charts.push({
+        sheetIndex: sheetIdx("Resumen general"),
         sheetName:  "Resumen general",
         catRange:   `$A$4:$A$${lastRow1Based}`,
         valRange:   `$B$4:$B$${lastRow1Based}`,
@@ -762,14 +1031,14 @@ export async function GET(request: NextRequest) {
         title:      `Resumen general nivel de satisfacción — ${periodo} ${anio}`,
         fromCol: 3,  fromRow: 1,
         toCol:   18, toRow:   Math.max(28, 3 + areasSorted.length + 2),
-        chartId: 1,
+        cache: { cats: areasSorted.map((a) => a.area), vals: areasSorted.map((a) => a.pct) },
       });
     }
 
-    // Chart 2: hoja "Dimensiones de calidad" (sheet3.xml) — columnas verticales.
+    // Hoja "Dimensiones de calidad" — columnas verticales.
     if (wsDim) {
-      body = await injectBarChart(body, {
-        sheetIndex: 3,
+      charts.push({
+        sheetIndex: sheetIdx("Dimensiones de calidad"),
         sheetName:  "Dimensiones de calidad",
         catRange:   "$A$5:$A$9",   // 5 dimensiones
         valRange:   "$B$5:$B$9",
@@ -778,13 +1047,27 @@ export async function GET(request: NextRequest) {
         title:      `Resultados satisfacción dimensiones de calidad — ${periodo} ${anio}`,
         fromCol: 3,  fromRow: 2,
         toCol:   12, toRow:   22,
-        chartId: 2,
-        barDir:  "col",
+        kind:    "col",
         numFmt:  "0.00%",
         valMax:  1,
         valMajorUnit: 0.25,
+        cache: {
+          cats: DIMENSIONES.map((d) => d.nombre),
+          vals: DIMENSIONES.map((d) => pctSat(dimRows, d.vars).pct),
+        },
       });
     }
+
+    // Hojas de detalle por tabla (se omiten las que no tengan datos en el periodo)
+    DETALLE_TABLAS.forEach((t, i) => {
+      const built = buildDetalleSheet(detalleRows[i], t, periodo, anio);
+      if (!built) return;
+      XLSX.utils.book_append_sheet(wb, built.ws, t.sheet);
+      for (const c of built.charts) charts.push({ ...c, sheetIndex: sheetIdx(t.sheet), sheetName: t.sheet });
+    });
+
+    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const body   = await injectCharts(new Uint8Array(buffer), charts);
 
     return new NextResponse(new Uint8Array(body), {
       headers: {
