@@ -10,9 +10,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  serverExternalPackages: ["pg", "@prisma/adapter-pg", "@napi-rs/canvas"],
+  serverExternalPackages: ["pg", "@prisma/adapter-pg", "@napi-rs/canvas", "nspell", "dictionary-es"],
   outputFileTracingIncludes: {
-    "/api/encuesta-satisfaccion/wordclouds": ["./public/fonts/**/*"],
+    // dictionary-es lee index.aff/index.dic con fs en tiempo de ejecución.
+    "/api/encuesta-satisfaccion/wordclouds": ["./public/fonts/**/*", "./node_modules/dictionary-es/index.{aff,dic}"],
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

@@ -645,7 +645,8 @@ export default function EncuestaSatisfaccionPage() {
               </h3>
               <p className="mb-5 text-sm leading-relaxed text-[#3e4a3e]">
                 Genera una nube de palabras por cada área evaluada a partir de los comentarios.
-                Limpia automáticamente stopwords, respuestas vacías (&ldquo;na&rdquo;, &ldquo;ok&rdquo;) y ruido textual.
+                Limpia automáticamente stopwords, respuestas vacías (&ldquo;na&rdquo;, &ldquo;ok&rdquo;), groserías,
+                texto sin sentido y palabras que escribió una sola persona (errores de tipeo).
                 Se descarga un ZIP con un PNG por área.
               </p>
 

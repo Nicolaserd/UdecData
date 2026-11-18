@@ -31,3 +31,4 @@ paths:
 - `xlsx`: desde el CDN oficial `https://cdn.sheetjs.com/xlsx-X.Y.Z/xlsx-X.Y.Z.tgz` (≥ 0.20.2), nunca desde npm (0.18.5 vulnerable). El lockfile debe tener su `integrity`.
 - `exceljs`: descartado (sin mantenimiento, dependencias obsoletas).
 - `xlsx-js-style`: solo escritura con estilos; prohibido para leer archivos.
+- `nspell` + `dictionary-es` (aprobado por el dueño, 2026-11-18): diccionario de español para las nubes de palabras (`lib/spanish-dictionary.ts`). Sin releases recientes pero estables, de wooorm, sin dependencias de riesgo; `dictionary-es` se usa bajo MPL-1.1 (tri-licencia GPL/LGPL/MPL) sin modificar sus archivos. No usar en otros módulos sin revisarlo.

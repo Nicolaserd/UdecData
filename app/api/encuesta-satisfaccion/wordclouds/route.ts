@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { prisma } from "@/lib/prisma";
 import { extractWords, safeFilename } from "@/lib/parsers/wordcloud-text";
 import { generateWordCloudPng } from "@/lib/wordcloud";
+import { getSpanishChecker } from "@/lib/spanish-dictionary";
 
 export const runtime     = "nodejs";
 export const maxDuration = 300;
@@ -42,9 +43,10 @@ export async function GET(request: NextRequest) {
     const zip      = new JSZip();
     const skipped: string[] = [];
     let generated  = 0;
+    const isSpanish = await getSpanishChecker();
 
     for (const [area, comments] of byArea.entries()) {
-      const words = extractWords(comments);
+      const words = extractWords(comments, 80, isSpanish ?? undefined);
       if (words.length < 3) {
         skipped.push(area);
         continue;
@@ -69,7 +71,12 @@ export async function GET(request: NextRequest) {
         ? `Áreas sin datos suficientes: ${skipped.join(", ")}`
         : "Todas las áreas disponibles fueron procesadas.",
       ``,
-      `Se filtraron: stopwords en español, ruido ("na", "ok", "ninguno", etc.), números y palabras de menos de 3 letras.`,
+      `Se filtraron: stopwords en español, ruido ("na", "ok", "ninguno", etc.), groserías, texto sin sentido`,
+      `("asdf", "gggg", letras al azar), números y palabras de menos de 3 letras.`,
+      isSpanish
+        ? `Solo aparecen palabras del diccionario de español, siglas conocidas (PQR, SGC…) o términos que usan al menos 3 personas (p. ej. "biblioclic").`
+        : `Diccionario no disponible: solo aparecen palabras usadas en al menos 2 comentarios distintos (así se descartan errores de tipeo).`,
+      `Las palabras con y sin tilde se cuentan juntas y se muestra la forma más escrita.`,
     ].join("\n");
     zip.file("README.txt", readme);
 
