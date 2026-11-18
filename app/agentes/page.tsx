@@ -399,7 +399,8 @@ export default function AgentesPage() {
   const [activeChatIds, setActiveChatIds] = useState<Record<AgentType, number | null>>({ analista: null, soporte: null });
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
-  const [loadingChats, setLoadingChats] = useState(true);
+  // Agente cuyo historial ya se cargó; mientras no coincida con el activo, se muestra "cargando".
+  const [chatsLoadedFor, setChatsLoadedFor] = useState<AgentType | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   // ── Estado móvil ──────────────────────────────────────────────────────────
@@ -416,6 +417,7 @@ export default function AgentesPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initializedChatsRef = useRef<Record<AgentType, boolean>>({ analista: false, soporte: false });
   const messages = conversations[activeAgent];
+  const loadingChats = chatsLoadedFor !== activeAgent;
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -424,7 +426,6 @@ export default function AgentesPage() {
   // Cargar historial de chats al montar y al cambiar de agente
   useEffect(() => {
     let cancelled = false;
-    setLoadingChats(true);
     fetch(`/api/agentes/chats?agent=${activeAgent}`)
       .then((r) => r.json())
       .then(async (data: SavedChat[]) => {
@@ -458,7 +459,7 @@ export default function AgentesPage() {
       })
       .catch(() => {})
       .finally(() => {
-        if (!cancelled) setLoadingChats(false);
+        if (!cancelled) setChatsLoadedFor(activeAgent);
       });
     return () => { cancelled = true; };
   }, [activeAgent, customApiKey]);

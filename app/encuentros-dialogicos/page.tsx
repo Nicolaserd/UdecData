@@ -169,6 +169,9 @@ type EncuestaPreviewData = {
   anio:      number;
 };
 
+// Respuesta de las rutas de carga (solo los campos que usa esta página)
+type UploadResult = { message: string; warnings?: string[]; inserted?: number; upserted?: number };
+
 type EncuestaModalState = {
   open:  boolean;
   tipo:  "estudiantes" | "docentes";
@@ -845,7 +848,7 @@ export default function EncuentrosDialogicosPage() {
       fd.append("encuentro", s.encuentro.trim());
       fd.append("anio",      s.anio);
       const res  = await fetch("/api/encuentros-dialogicos/preview-encuesta", { method: "POST", body: fd });
-      const json = await readApiJson<any>(res, `analizar la encuesta de ${tipo}`);
+      const json = await readApiJson<EncuestaPreviewData>(res, `analizar la encuesta de ${tipo}`);
       setter((p) => ({ ...p, uploadState: "idle" }));
       setEncModal({ open: true, tipo, data: json });
     } catch (err) {
@@ -869,7 +872,7 @@ export default function EncuentrosDialogicosPage() {
         ? "/api/encuentros-dialogicos/upload-encuesta-estudiantes"
         : "/api/encuentros-dialogicos/upload-encuesta-docentes";
       const res  = await fetch(endpoint, { method: "POST", headers: pinHeaders(), body: fd });
-      const json = await readApiJson<any>(res, `guardar la encuesta de ${tipo} en la base de datos`);
+      const json = await readApiJson<UploadResult>(res, `guardar la encuesta de ${tipo} en la base de datos`);
       setter((p) => ({ ...p, uploadState: "success", message: json.message, warnings: json.warnings ?? [], inserted: json.inserted ?? 0 }));
       setEncModal({ open: false, tipo: "estudiantes", data: null });
       fetchEncuestaStats(encAnio, encEncuentro);
@@ -895,7 +898,7 @@ export default function EncuentrosDialogicosPage() {
       fd.append("file", file);
       fd.append("tipo", tipo);
       const res  = await fetch("/api/encuentros-dialogicos/preview-planes", { method: "POST", body: fd });
-      const json = await readApiJson<any>(res, `analizar el plan de mejoramiento de ${tipo}`);
+      const json = await readApiJson<PreviewData>(res, `analizar el plan de mejoramiento de ${tipo}`);
       setter((p) => ({ ...p, uploadState: "idle" }));
       setModal({ open: true, tipo, data: json });
     } catch (err) {
@@ -922,7 +925,7 @@ export default function EncuentrosDialogicosPage() {
         ? "/api/encuentros-dialogicos/upload-estudiantes"
         : "/api/encuentros-dialogicos/upload-docentes";
       const res  = await fetch(endpoint, { method: "POST", headers: pinHeaders(), body: fd });
-      const json = await readApiJson<any>(res, `guardar el plan de mejoramiento de ${tipo} en la base de datos`);
+      const json = await readApiJson<UploadResult>(res, `guardar el plan de mejoramiento de ${tipo} en la base de datos`);
       setter((p) => ({
         ...p,
         uploadState: "success",

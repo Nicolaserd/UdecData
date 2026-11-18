@@ -53,6 +53,18 @@ type PreviewData = {
   periodo_academico: string;
 };
 
+// Respuestas de las APIs (solo los campos que usa esta página)
+type UploadResult      = { message: string; warnings?: string[] };
+type AnalisisStart     = { totalChunks: number; totalAreas: number; areasSinComentarios?: number };
+type AnalisisProcess   = {
+  done: boolean; restantes: number; ultimoError?: string;
+  counts: { completado: number; error_final: number; total: number };
+};
+type AnalisisConsolida = {
+  done: boolean; ultimoError?: string;
+  counts: { completado: number; error: number; total: number };
+};
+
 type BarItem = { label: string; pct: number; satisfechos: number; total: number };
 type DistItem = { label: string; count: number };
 
@@ -229,7 +241,7 @@ export default function EncuestaSatisfaccionPage() {
       fd.append("anio", form.anio);
       fd.append("periodo_academico", form.periodo);
       const res  = await fetch("/api/encuesta-satisfaccion/preview", { method: "POST", body: fd });
-      const json = await readApiJson<any>(res, "analizar el archivo de la encuesta");
+      const json = await readApiJson<PreviewData>(res, "analizar el archivo de la encuesta");
       setForm((p) => ({ ...p, uploadState: "idle" }));
       setPreviewData(json);
       setPreviewOpen(true);
@@ -256,7 +268,7 @@ export default function EncuestaSatisfaccionPage() {
       fd.append("anio", form.anio);
       fd.append("periodo_academico", form.periodo);
       const res  = await fetch("/api/encuesta-satisfaccion/upload", { method: "POST", headers: pinHeaders(), body: fd });
-      const json = await readApiJson<any>(res, "guardar la encuesta en la base de datos");
+      const json = await readApiJson<UploadResult>(res, "guardar la encuesta en la base de datos");
       setForm((p) => ({ ...p, uploadState: "success", message: json.message, warnings: json.warnings ?? [] }));
       setPreviewOpen(false);
       fetchStats(filterAnio, filterPeriodo, filterSede, filterRol);
@@ -365,7 +377,7 @@ export default function EncuestaSatisfaccionPage() {
       // 1. Start: crear chunks
       setLlmStage("Preparando chunks…");
       const startRes  = await fetch("/api/encuesta-satisfaccion/analisis/start", { method: "POST", headers, body });
-      const startJson = await readApiJson<any>(startRes, "iniciar el análisis con IA");
+      const startJson = await readApiJson<AnalisisStart>(startRes, "iniciar el análisis con IA");
       setLlmProgress({
         chunks:      0,
         total:       startJson.totalChunks,
@@ -383,7 +395,7 @@ export default function EncuestaSatisfaccionPage() {
         while (!done && safety-- > 0) {
           const res  = await fetch("/api/encuesta-satisfaccion/analisis/process", { method: "POST", headers, body });
           if (await waitIfRateLimited(res)) continue;
-          const json = await readApiJson<any>(res, "analizar los comentarios con IA");
+          const json = await readApiJson<AnalisisProcess>(res, "analizar los comentarios con IA");
           const terminal = (json.counts.completado ?? 0) + (json.counts.error_final ?? 0);
           setLlmProgress((p) => ({ ...p, chunks: terminal, total: json.counts.total }));
           done = json.done;
@@ -409,7 +421,7 @@ export default function EncuestaSatisfaccionPage() {
         while (!done && safety-- > 0) {
           const res  = await fetch("/api/encuesta-satisfaccion/analisis/consolidate", { method: "POST", headers, body });
           if (await waitIfRateLimited(res)) continue;
-          const json = await readApiJson<any>(res, "consolidar el análisis por área");
+          const json = await readApiJson<AnalisisConsolida>(res, "consolidar el análisis por área");
           const terminal = (json.counts.completado ?? 0) + (json.counts.error ?? 0);
           setLlmProgress((p) => ({ ...p, consol: json.counts.completado, consolTotal: json.counts.total }));
           done = json.done;

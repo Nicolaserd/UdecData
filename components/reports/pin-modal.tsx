@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Eye, EyeOff, KeyRound, Loader2, X } from "lucide-react";
 
@@ -10,16 +10,18 @@ interface PinModalProps {
   onCancel: () => void;
 }
 
+const subscribeNoop = () => () => {};
+
 export function PinModal({ onConfirm, onCancel }: PinModalProps) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  // true en el navegador, false al renderizar en el servidor (createPortal necesita document.body)
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setMounted(true);
     inputRef.current?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";

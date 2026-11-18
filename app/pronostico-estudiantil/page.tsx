@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, GraduationCap, ShieldCheck, TrendingUp } from "lucide-react";
 import {
   CartesianGrid,
@@ -93,7 +93,10 @@ export default function PronosticoEstudiantilPage() {
   const [unidadRegional, setUnidadRegional] = useState("");
   const [programaAcademico, setProgramaAcademico] = useState("");
   const [data, setData] = useState<ApiResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Filtros de la última consulta terminada; mientras no coincidan con los actuales, "cargando".
+  const queryKey = `${categoriaActiva}|${unidadRegional}|${programaAcademico}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== queryKey;
   const [downloading, setDownloading] = useState<"pregrado" | "posgrado" | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -104,25 +107,18 @@ export default function PronosticoEstudiantilPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  const fetchData = useCallback(async (cat: string, ur: string, prog: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ categoria: cat });
-      if (ur) params.set("unidad_regional", ur);
-      if (prog) params.set("programa_academico", prog);
-      const res = await fetch(`/api/pronostico?${params.toString()}`);
-      const json = (await res.json()) as ApiResponse;
-      setData(json);
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void fetchData(categoriaActiva, unidadRegional, programaAcademico);
-  }, [categoriaActiva, unidadRegional, programaAcademico, fetchData]);
+    let cancelled = false; // si cambian los filtros antes de responder, se ignora la respuesta vieja
+    const params = new URLSearchParams({ categoria: categoriaActiva });
+    if (unidadRegional) params.set("unidad_regional", unidadRegional);
+    if (programaAcademico) params.set("programa_academico", programaAcademico);
+    fetch(`/api/pronostico?${params.toString()}`)
+      .then((res) => res.json() as Promise<ApiResponse>)
+      .then((json) => { if (!cancelled) setData(json); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoadedKey(queryKey); });
+    return () => { cancelled = true; };
+  }, [categoriaActiva, unidadRegional, programaAcademico, queryKey]);
 
   const handleDownload = async (nivel: "pregrado" | "posgrado") => {
     setDownloading(nivel);
